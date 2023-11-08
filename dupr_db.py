@@ -143,7 +143,7 @@ class Player(Base):
             p.rating.singles = player.rating.singles if player.rating.singles else None
             p.rating.singles_verified = player.rating.singles_verified if player.rating.singles_verified else None
             p.rating.is_singles_provisional = player.rating.is_singles_provisional
-            p.club_id = player.club_id
+            p.club_id = player.club_id if player.club_id else None
             sess.add(p)
             return p
         else:
