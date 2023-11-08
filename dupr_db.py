@@ -98,7 +98,7 @@ class Player(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(256))
     email: Mapped[Optional[str]] = mapped_column(String(256))
     phone: Mapped[Optional[str]] = mapped_column(String(64))
-    club_id: Mapped[int] = mapped_column(Integer)
+    club_id: Mapped[Optional[int]] = mapped_column(Integer)
 
     # Note: in 1-1 mapping, no need to use the uselist=false
     # param if we are using Mapped annotation
