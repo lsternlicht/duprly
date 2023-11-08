@@ -10,6 +10,9 @@ data:
 report:
 	python duprly.py write-excel;open dupr.xlsx
 
+match_detai:
+  python duprly.py build-match-detail
+
 web: rating_view player_view match_player_view match_detail_view
 	datasette {{DB_PATH}}
 
@@ -105,6 +108,3 @@ match_report_view:
 
 move_db:
 	- mv dupr.sqlite dupr_`date +%Y%m%d_%H%M`.sqlite
-
-
-

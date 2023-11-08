@@ -98,6 +98,7 @@ class Player(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(256))
     email: Mapped[Optional[str]] = mapped_column(String(256))
     phone: Mapped[Optional[str]] = mapped_column(String(64))
+    club_id: Mapped[int] = mapped_column(Integer)
 
     # Note: in 1-1 mapping, no need to use the uselist=false
     # param if we are using Mapped annotation
@@ -142,6 +143,7 @@ class Player(Base):
             p.rating.singles = player.rating.singles if player.rating.singles else None
             p.rating.singles_verified = player.rating.singles_verified if player.rating.singles_verified else None
             p.rating.is_singles_provisional = player.rating.is_singles_provisional
+            p.club_id = player.club_id
             sess.add(p)
             return p
         else:
@@ -166,6 +168,7 @@ class Player(Base):
             p.email = d.get("email")
             p.gender = d.get("gender")
             p.age = d.get("age")
+            p.club_id = d.get("club_id")
 
             p.rating = Rating()
 
