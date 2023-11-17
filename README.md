@@ -59,3 +59,15 @@ class Rating(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("player.id"))
     player: Mapped["Player"] = relationship(back_populates="rating")
 '''
+## Usage
+```console
+#.env
+
+DUPR_USERNAME=<username>
+DUPR_PASSWORD=<password>
+DUPR_CLUB_ID=8436164521
+```
+
+```console
+python duprly.py get-all-players
+```
