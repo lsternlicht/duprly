@@ -1,4 +1,5 @@
 import os
+import tqdm
 from loguru import logger
 import click
 import json
@@ -44,6 +45,14 @@ def get_player_from_dupr(pid: int) -> Player:
     return player
 
 
+def _get_all_player_ids():
+    with Session(eng) as sess:
+        dupr_ids = [i[0] for i in sess.execute(select(Player.dupr_id)).all()]
+        sess.flush()
+    sess.commit()
+    return dupr_ids
+
+
 def get_all_players_from_dupr():
     club_id = os.getenv("DUPR_CLUB_ID")
     _rc, players = dupr.get_members_by_club(club_id)
@@ -60,6 +69,9 @@ def get_matches_from_dupr(dupr_id: int):
 
     _rc, matches = dupr.get_member_match_history_p(dupr_id)
 
+    from sqlalchemy import create_engine
+    eng = create_engine('sqlite:///dupr.sqlite', connect_args={'timeout': 15})
+
     with Session(eng) as sess:
 
         for mdata in matches:
@@ -71,6 +83,8 @@ def get_matches_from_dupr(dupr_id: int):
             m1 = Match.get_by_id(sess, m.match_id)
             if m1:
                 # update
+                sess.flush()
+                sess.close()
                 continue  # skip
 
             for team in m.teams:
@@ -98,7 +112,9 @@ def get_matches_from_dupr(dupr_id: int):
                         print(f"saved new limited data player")
                 team.players = plist
             sess.add(m)
+            sess.flush()
             sess.commit()
+        sess.close()
 
 
 def update_ratings_from_dupr():
@@ -249,12 +265,23 @@ def test_db():
     for i in dupr_ids:
         print(i)
 
+@click.command()
+def get_all_player_ids():
+    dupr_auth()
+    return _get_all_player_ids()
 
 @click.command()
 def get_all_players():
     dupr_auth()
     get_all_players_from_dupr()
 
+@click.command()
+def get_all_player_matches():
+    dupr_ids = _get_all_player_ids()
+    for dupr_id in tqdm.tqdm(dupr_ids):
+        dupr_auth()
+        logger.info(f'Getting matches for: {dupr_id}')
+        get_matches_from_dupr(dupr_id)
 
 @click.command()
 @click.argument("dupr_id")
@@ -294,4 +321,5 @@ if __name__ == "__main__":
     cli.add_command(update_ratings)
     cli.add_command(build_match_detail)
     cli.add_command(test_db)
+    cli.add_command(get_all_player_matches)
     cli()

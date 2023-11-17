@@ -10,11 +10,17 @@ data:
 report:
 	python duprly.py write-excel;open dupr.xlsx
 
-match_detai:
+match_detail:
   python duprly.py build-match-detail
+
+all_matches:
+  python duprly.py get-all-player-matches
 
 web: rating_view player_view match_player_view match_detail_view
 	datasette {{DB_PATH}}
+
+players:
+  python duprly.py get-all-players
 
 
 rating_view:

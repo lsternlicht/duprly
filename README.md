@@ -71,3 +71,11 @@ DUPR_CLUB_ID=8436164521
 ```console
 python duprly.py get-all-players
 ```
+
+
+## ClubIDs
+```
+CityPickle=5951786727
+NYCPickleball=8436164521
+LifeTime
+```

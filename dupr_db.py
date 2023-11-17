@@ -18,7 +18,7 @@ engine = None
 def open_db():
     global engine
     # engine = create_engine("sqlite+pysqlite:///:memory:", echo=False)
-    engine = create_engine("sqlite+pysqlite:///dupr.sqlite", echo=False)
+    engine = create_engine("sqlite+pysqlite:///dupr.sqlite", echo=False,  connect_args={'timeout': 15})
     Base.metadata.create_all(engine)
     return engine
 
@@ -98,7 +98,7 @@ class Player(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(256))
     email: Mapped[Optional[str]] = mapped_column(String(256))
     phone: Mapped[Optional[str]] = mapped_column(String(64))
-    club_id: Mapped[Optional[int]] = mapped_column(Integer)
+    club_id: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
     # Note: in 1-1 mapping, no need to use the uselist=false
     # param if we are using Mapped annotation
@@ -143,7 +143,7 @@ class Player(Base):
             p.rating.singles = player.rating.singles if player.rating.singles else None
             p.rating.singles_verified = player.rating.singles_verified if player.rating.singles_verified else None
             p.rating.is_singles_provisional = player.rating.is_singles_provisional
-            p.club_id = player.club_id if player.club_id else None
+            p.club_id = player.club_id if player.club_id else 0
             sess.add(p)
             return p
         else:
