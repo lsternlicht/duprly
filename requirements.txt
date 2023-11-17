@@ -5,3 +5,4 @@ python-dotenv
 SQLAlchemy==2.0.4
 datasette==0.59
 sqlite-utils==3.17.1
+openpyxl
