@@ -77,5 +77,5 @@ python duprly.py get-all-players
 ```
 CityPickle=5951786727
 NYCPickleball=8436164521
-LifeTime
+LifeTime=7735643894
 ```
