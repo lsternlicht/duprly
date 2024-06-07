@@ -169,7 +169,21 @@ class DuprClient(object):
 
     def get_member_match_history_p(self, member_id: str) -> tuple[int, list]:
         page_data = {
-            "filters": {},
+              "filters": {
+            "eventDate": {
+            "endDate": "2025-01-01",
+            "startDate": "2020-01-01"
+            },
+            "eventFormat": [
+            "SINGLES",
+            "DOUBLES"
+            ],
+            "eventName": "",
+            "matchStatus": [
+            "COMPLETE",
+            "PENDING"
+            ],
+        },
             "sort": {
                 "order": "DESC",
                 "parameter": "MATCH_DATE",
