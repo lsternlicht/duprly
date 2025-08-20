@@ -64,7 +64,7 @@ def get_all_players_from_dupr():
             sess.commit()
 
 
-def get_matches_from_dupr(dupr_id: int):
+def get_matches_from_dupr(dupr_id: int = None):
     """ Get match history for specified player """
 
     _rc, matches = dupr.get_member_match_history_p(dupr_id)

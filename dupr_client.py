@@ -16,13 +16,20 @@ from requests import Response
 from loguru import logger
 import json
 from typing import Optional
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
+load_dotenv()
 
 class DuprClient(object):
 
     def __init__(self, api_url: str = None, api_version: str = None, verbose: bool = False):
+
         self.env_path = os.path.expanduser('~/.duprly_config')
-        logger.debug(self.env_path)
+        logger.debug(f"config file: {self.env_path}")
+        # config exists?
+        logger.debug(f"config exists: {os.path.exists(self.env_path)}")
+
         if api_url:
             self.env_url = api_url
         else:
@@ -35,17 +42,23 @@ class DuprClient(object):
         self.refresh_token = None  # from login
         self.failed = False  # Strange way to return error, for now TBD
         self.verbose = verbose
+        self.profile = None
         self.load_token()
+    
 
     def load_token(self):
         """ Load access token stored locally if available """
-        try:
-            with open(self.env_path, "r") as f:
-                data = json.load(f)
-                logger.debug(f"{data['access_token'][:10]}...")
-                self.access_token = data['access_token']
-        except FileNotFoundError:
-            pass
+        self.access_token = os.getenv('DUPR_ACCESS_TOKEN', None)
+        if not self.access_token:
+            logger.debug("No access token found, trying to load from config file")
+        else:
+            try:
+                with open(self.env_path, "r") as f:
+                    data = json.load(f)
+                    self.access_token = data['access_token']
+            except FileNotFoundError:
+                pass
+        logger.debug(f"access token: {self.access_token[:10]}...")
 
     def save_token(self):
         """ Save  access token to disk, in plain json text
@@ -149,8 +162,10 @@ class DuprClient(object):
     def get_profile(self) -> tuple[int, dict]:
         r = self.dupr_get(f'/user/{self.version}/profile/', "get_profile")
         if r.status_code == 200:
-            self.ppj(r.json())
-            return r.status_code, r.json()["result"]
+            data = r.json()
+            self.profile = data["result"]
+            self.ppj(data)
+            return r.status_code, data["result"]
         return r.status_code, None
 
     def get_player(self, player_id: str) -> tuple[int, Optional[dict]]:
@@ -167,12 +182,23 @@ class DuprClient(object):
             self.ppj(r.json())
         return r.status_code
 
-    def get_member_match_history_p(self, member_id: str) -> tuple[int, list]:
+    def get_member_match_history_p(self, member_id: str, start_date: str, end_date: str) -> tuple[int, list]:
+        """
+        end_date = end_date or datetime.now().strftime("%Y-%m-%d")
+        start_date = start_date or datetime.now().strftime("%Y-%m-%d")
+        """
+       
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        if not start_date:
+            # two years before end date
+            start_date = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=365*2)).strftime("%Y-%m-%d")  
+
         page_data = {
               "filters": {
             "eventDate": {
-            "endDate": "2025-01-01",
-            "startDate": "2020-01-01"
+            "endDate": end_date,
+            "startDate": start_date
             },
             "eventFormat": [
             "SINGLES",
