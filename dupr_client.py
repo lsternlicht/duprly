@@ -19,16 +19,21 @@ from typing import Optional
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-load_dotenv()
 
 class DuprClient(object):
 
-    def __init__(self, api_url: str = None, api_version: str = None, verbose: bool = False):
+    def __init__(self, api_url: str = None, api_version: str = None, verbose: bool = False, env_path: str = None):
 
-        self.env_path = os.path.expanduser('~/.duprly_config')
-        logger.debug(f"config file: {self.env_path}")
-        # config exists?
-        logger.debug(f"config exists: {os.path.exists(self.env_path)}")
+        if env_path:
+            self.env_path = env_path
+            logger.debug(f"config file: {self.env_path}")
+        elif os.path.exists('.env'):
+            logger.debug(f"loading .env file")
+            load_dotenv()
+        else:
+            self.env_path = os.path.expanduser('~/.duprly_config')
+            # config exists?
+            logger.debug(f"config exists: {os.path.exists(self.env_path)}")
 
         if api_url:
             self.env_url = api_url
@@ -43,20 +48,23 @@ class DuprClient(object):
         self.failed = False  # Strange way to return error, for now TBD
         self.verbose = verbose
         self.profile = None
+        # breakpoint()
         self.load_token()
     
 
     def load_token(self):
         """ Load access token stored locally if available """
         self.access_token = os.getenv('DUPR_ACCESS_TOKEN', None)
-        if not self.access_token:
-            logger.debug("No access token found, trying to load from config file")
+        if self.access_token:
+            logger.debug(f"Access token found, skipping login. Token: {self.access_token[:10]}...")
         else:
+            logger.debug("No access token found, trying to load from config file")
             try:
                 with open(self.env_path, "r") as f:
                     data = json.load(f)
                     self.access_token = data['access_token']
             except FileNotFoundError:
+                logger.debug(f"No config file found at {self.env_path}")
                 pass
         logger.debug(f"access token: {self.access_token[:10]}...")
 
@@ -104,6 +112,7 @@ class DuprClient(object):
             Not oauth style access/refresh token set.
         """
         if self.access_token:
+            logger.debug("Access token found, skipping login")
             return 0
         else:
             rc = self.login_user(username, password)
@@ -166,6 +175,8 @@ class DuprClient(object):
             self.profile = data["result"]
             self.ppj(data)
             return r.status_code, data["result"]
+        else:
+            logger.debug(f"Failed to get profile: {r.status_code}")
         return r.status_code, None
 
     def get_player(self, player_id: str) -> tuple[int, Optional[dict]]:
@@ -181,6 +192,26 @@ class DuprClient(object):
         if r.status_code == 200:
             self.ppj(r.json())
         return r.status_code
+
+    def search_clubs(self, query: str, limit: int = 10) -> tuple[int, list]:
+        """
+        Search for clubs by name.
+        Returns status code and list of club hits.
+        """
+        payload = {
+            "limit": limit,
+            "offset": 0,
+            "query": query,
+            "exclude": [],
+            "filter": {}
+        }
+        r = self.dupr_post(f'/club/{self.version}/all', json_data=payload, name="search_clubs")
+        if r.status_code == 200:
+            data = r.json()
+            self.ppj(data)
+            hits = data.get("result", {}).get("hits", [])
+            return r.status_code, hits
+        return r.status_code, []
 
     def get_member_match_history_p(self, member_id: str, start_date: str, end_date: str) -> tuple[int, list]:
         """
@@ -284,3 +315,29 @@ class DuprClient(object):
                 pdata.extend(hits)
 
         return r.status_code, pdata
+
+    def get_members_by_club_ranking(self, club_id: str, limit: int = 20, offset: int = 0, query: str = "*", get_all: bool = False): 
+        """
+        this call is a post call because it supports query and filter.
+        """
+        data = {
+            "exclude": [],
+            "limit": limit,
+            "offset": offset,
+            "query": query
+            }
+        r = self.dupr_post(f'/club/{club_id}/v1.0/ranking', json_data=data, name="get_member_by_club")
+        if r.status_code == 200:
+            total_players = r.json()["result"]["memberRanking"]["total"]
+            total_pages = total_players // limit
+            players = r.json()["result"]["memberRanking"]["hits"]
+            if get_all:
+                for page in range(1, total_pages + 1):
+                    data["offset"] = page * limit
+                    r = self.dupr_post(f'/club/{club_id}/v1.0/ranking', json_data=data, name="get_member_by_club")
+                    if r.status_code == 200:
+                        _players = r.json()["result"]["memberRanking"]["hits"]
+                        players.extend(_players)
+
+            return r.status_code, players
+        return r.status_code, []
