@@ -13,6 +13,8 @@ class DatasetteConfigTests(unittest.TestCase):
 
         queries = metadata["databases"]["dupr"]["queries"]
         expected_queries = {
+            "player_directory",
+            "club_directory",
             "player_rating_over_time",
             "player_rating_summary",
             "player_recent_form",
@@ -36,6 +38,17 @@ class DatasetteConfigTests(unittest.TestCase):
         self.assertIn("rating", trend_sql)
         self.assertIn("rating_type", trend_sql)
         self.assertIn("DOUBLES", trend_sql)
+
+    def test_directory_queries_use_name_and_id_filters(self):
+        metadata = build_datasette_metadata("dupr")
+        player_sql = metadata["databases"]["dupr"]["queries"]["player_directory"]["sql"]
+        club_sql = metadata["databases"]["dupr"]["queries"]["club_directory"]["sql"]
+        self.assertIn("v_player_directory", player_sql)
+        self.assertIn("player_full_name", player_sql)
+        self.assertIn("player_dupr_id", player_sql)
+        self.assertIn("v_club_directory", club_sql)
+        self.assertIn("club_name", club_sql)
+        self.assertIn("club_id", club_sql)
 
 
 if __name__ == "__main__":

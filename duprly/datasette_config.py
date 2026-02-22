@@ -4,6 +4,51 @@ from __future__ import annotations
 def build_datasette_metadata(db_name: str) -> dict:
     """Build Datasette metadata with curated canned analytics queries."""
     queries = {
+        "player_directory": {
+            "title": "Player Directory",
+            "description": (
+                "Player name/ID lookup source for dashboard inputs with autocomplete and dropdowns."
+            ),
+            "hide_sql": True,
+            "params": ["q", "limit"],
+            "sql": """
+                SELECT
+                    player_dupr_id,
+                    player_full_name,
+                    club_id,
+                    player_label
+                FROM v_player_directory
+                WHERE (
+                    NULLIF(:q, '') IS NULL
+                    OR LOWER(player_full_name) LIKE '%' || LOWER(:q) || '%'
+                    OR CAST(player_dupr_id AS TEXT) LIKE '%' || :q || '%'
+                )
+                ORDER BY player_full_name COLLATE NOCASE ASC, player_dupr_id ASC
+                LIMIT COALESCE(CAST(NULLIF(:limit, '') AS INTEGER), 2000)
+            """,
+        },
+        "club_directory": {
+            "title": "Club Directory",
+            "description": (
+                "Club name/ID lookup source for dashboard inputs with autocomplete and dropdowns."
+            ),
+            "hide_sql": True,
+            "params": ["q", "limit"],
+            "sql": """
+                SELECT
+                    club_id,
+                    club_name,
+                    club_label
+                FROM v_club_directory
+                WHERE (
+                    NULLIF(:q, '') IS NULL
+                    OR LOWER(club_name) LIKE '%' || LOWER(:q) || '%'
+                    OR CAST(club_id AS TEXT) LIKE '%' || :q || '%'
+                )
+                ORDER BY club_name COLLATE NOCASE ASC, club_id ASC
+                LIMIT COALESCE(CAST(NULLIF(:limit, '') AS INTEGER), 1000)
+            """,
+        },
         "player_rating_over_time": {
             "title": "Player Rating Over Time",
             "description": (
@@ -355,6 +400,12 @@ def build_datasette_metadata(db_name: str) -> dict:
                         "description": (
                             "Current player ratings with cached player identity columns for easier browsing."
                         )
+                    },
+                    "v_player_directory": {
+                        "description": "Player name/ID labels for fast local lookup controls."
+                    },
+                    "v_club_directory": {
+                        "description": "Club name/ID labels resolved from saved local metadata."
                     },
                     "v_player_rating_points": {
                         "description": "Row-level rating history points joined to player identity."

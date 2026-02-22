@@ -10,8 +10,11 @@
   .dupr-card p { margin: 0 0 10px 0; color: #444; }
   .dupr-form { display: grid; gap: 8px; }
   .dupr-form input, .dupr-form select { width: 100%; }
+  .dupr-entity-picker { display: grid; gap: 6px; }
   .dupr-actions { margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }
   .dupr-note { margin-top: 12px; color: #666; font-size: .95rem; }
+  .dupr-directory-status { margin-top: 12px; color: #1f5d7c; font-size: .9rem; }
+  .dupr-directory-status.dupr-error { color: #9f1239; }
 </style>
 
 <section>
@@ -25,12 +28,27 @@
     <a class="button" href="/dupr/v_player_rating_points">Rating history rows</a>
   </div>
 
+  <p class="dupr-directory-status" id="dupr-directory-status">Loading player and club options from your local DB...</p>
+  <datalist id="dupr-player-options"></datalist>
+  <datalist id="dupr-club-options"></datalist>
+
   <div class="dupr-cards">
     <div class="dupr-card">
       <h3>This player's ranking over time</h3>
       <p>Line/table-ready trend query for a single player.</p>
       <form class="dupr-form" onsubmit="return goPlayerTrend(this)">
-        <input name="dupr_id" placeholder="DUPR ID" required>
+        <div class="dupr-entity-picker">
+          <input
+            name="dupr_id_input"
+            data-role="player-input"
+            list="dupr-player-options"
+            placeholder="Player name or DUPR ID"
+            autocomplete="off"
+          >
+          <select name="dupr_id_select" data-role="player-select">
+            <option value="">Or pick player...</option>
+          </select>
+        </div>
         <select name="rating_type">
           <option value="DOUBLES" selected>Doubles</option>
           <option value="SINGLES">Singles</option>
@@ -45,7 +63,18 @@
       <h3>Recent form</h3>
       <p>Win/loss and win-rate momentum over a recent window.</p>
       <form class="dupr-form" onsubmit="return goRecentForm(this)">
-        <input name="dupr_id" placeholder="DUPR ID" required>
+        <div class="dupr-entity-picker">
+          <input
+            name="dupr_id_input"
+            data-role="player-input"
+            list="dupr-player-options"
+            placeholder="Player name or DUPR ID"
+            autocomplete="off"
+          >
+          <select name="dupr_id_select" data-role="player-select">
+            <option value="">Or pick player...</option>
+          </select>
+        </div>
         <input name="days" value="90" placeholder="Days">
         <button type="submit">Open Recent Form</button>
       </form>
@@ -55,7 +84,18 @@
       <h3>Best partners</h3>
       <p>Find partner combinations with match volume and win-rate.</p>
       <form class="dupr-form" onsubmit="return goPartnerBreakdown(this)">
-        <input name="dupr_id" placeholder="DUPR ID" required>
+        <div class="dupr-entity-picker">
+          <input
+            name="dupr_id_input"
+            data-role="player-input"
+            list="dupr-player-options"
+            placeholder="Player name or DUPR ID"
+            autocomplete="off"
+          >
+          <select name="dupr_id_select" data-role="player-select">
+            <option value="">Or pick player...</option>
+          </select>
+        </div>
         <input name="days" value="90" placeholder="Days">
         <button type="submit">Open Partner Breakdown</button>
       </form>
@@ -65,7 +105,18 @@
       <h3>Hardest opponents</h3>
       <p>Opponent-level matchup outcomes for targeted analysis.</p>
       <form class="dupr-form" onsubmit="return goOpponentBreakdown(this)">
-        <input name="dupr_id" placeholder="DUPR ID" required>
+        <div class="dupr-entity-picker">
+          <input
+            name="dupr_id_input"
+            data-role="player-input"
+            list="dupr-player-options"
+            placeholder="Player name or DUPR ID"
+            autocomplete="off"
+          >
+          <select name="dupr_id_select" data-role="player-select">
+            <option value="">Or pick player...</option>
+          </select>
+        </div>
         <input name="days" value="90" placeholder="Days">
         <button type="submit">Open Opponent Breakdown</button>
       </form>
@@ -75,7 +126,18 @@
       <h3>Top club risers</h3>
       <p>Who improved most over the selected time window.</p>
       <form class="dupr-form" onsubmit="return goTopRisers(this)">
-        <input name="club_id" placeholder="Club ID (optional)">
+        <div class="dupr-entity-picker">
+          <input
+            name="club_id_input"
+            data-role="club-input"
+            list="dupr-club-options"
+            placeholder="Club name or Club ID (optional)"
+            autocomplete="off"
+          >
+          <select name="club_id_select" data-role="club-select">
+            <option value="">All clubs (optional)</option>
+          </select>
+        </div>
         <select name="rating_type">
           <option value="DOUBLES" selected>Doubles</option>
           <option value="SINGLES">Singles</option>
@@ -90,6 +152,11 @@
 </section>
 
 <script>
+  const playerNameToId = new Map();
+  const clubNameToId = new Map();
+  const playerLabelById = new Map();
+  const clubLabelById = new Map();
+
   function toQuery(params) {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
@@ -98,15 +165,197 @@
     return qs.toString();
   }
 
+  function normalizeText(value) {
+    return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function extractNumericId(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (/^\d+$/.test(text)) return text;
+    const bracket = text.match(/\[(\d+)\]\s*$/);
+    if (bracket) return bracket[1];
+    const paren = text.match(/\((\d+)\)\s*$/);
+    if (paren) return paren[1];
+    return "";
+  }
+
+  function resolveEntityId(textValue, selectedValue, nameToId) {
+    const typed = String(textValue || "").trim();
+    const byId = extractNumericId(typed);
+    if (byId) return byId;
+    const byName = nameToId.get(normalizeText(typed));
+    if (byName) return byName;
+    return String(selectedValue || "").trim();
+  }
+
   function go(path, params) {
     const qs = toQuery(params);
     window.location.href = qs ? `${path}?${qs}` : path;
     return false;
   }
 
+  function setDirectoryStatus(message, isError) {
+    const el = document.getElementById("dupr-directory-status");
+    if (!el) return;
+    el.textContent = message;
+    el.classList.toggle("dupr-error", !!isError);
+  }
+
+  function resetSelectOptions(selector, emptyLabel) {
+    document.querySelectorAll(selector).forEach((select) => {
+      select.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = emptyLabel;
+      select.appendChild(option);
+    });
+  }
+
+  function addSharedOptions(selector, rows, idField, labelField) {
+    document.querySelectorAll(selector).forEach((select) => {
+      rows.forEach((row) => {
+        const option = document.createElement("option");
+        option.value = row[idField];
+        option.textContent = row[labelField];
+        select.appendChild(option);
+      });
+    });
+  }
+
+  function setDataListOptions(listId, rows, labelField) {
+    const datalist = document.getElementById(listId);
+    if (!datalist) return;
+    datalist.innerHTML = "";
+    rows.forEach((row) => {
+      const option = document.createElement("option");
+      option.value = row[labelField];
+      datalist.appendChild(option);
+    });
+  }
+
+  function syncLinkedInputs(inputSelector, selectSelector, nameToId, labelById) {
+    document.querySelectorAll(".dupr-form").forEach((form) => {
+      const input = form.querySelector(inputSelector);
+      const select = form.querySelector(selectSelector);
+      if (!input || !select) return;
+
+      select.addEventListener("change", () => {
+        const id = String(select.value || "").trim();
+        input.value = id && labelById.has(id) ? labelById.get(id) : "";
+      });
+
+      input.addEventListener("input", () => {
+        const id = resolveEntityId(input.value, "", nameToId);
+        if (id && select.querySelector(`option[value="${id}"]`)) {
+          select.value = id;
+        } else {
+          select.value = "";
+        }
+      });
+    });
+  }
+
+  async function fetchDirectoryRows(path) {
+    const response = await fetch(path, { credentials: "same-origin" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    return Array.isArray(payload.rows) ? payload.rows : [];
+  }
+
+  async function loadDirectoryOptions() {
+    try {
+      const [players, clubs] = await Promise.all([
+        fetchDirectoryRows("/dupr/player_directory.json?limit=10000"),
+        fetchDirectoryRows("/dupr/club_directory.json?limit=5000"),
+      ]);
+
+      const playerRows = players
+        .map((row) => {
+          const id = String(row.player_dupr_id || "").trim();
+          const name = String(row.player_full_name || "Unknown").trim();
+          const label = String(row.player_label || `${name} [${id}]`).trim();
+          return { player_dupr_id: id, player_full_name: name, player_label: label };
+        })
+        .filter((row) => row.player_dupr_id);
+      const clubRows = clubs
+        .map((row) => {
+          const id = String(row.club_id || "").trim();
+          const name = String(row.club_name || `Club ${id}`).trim();
+          const label = String(row.club_label || `${name} [${id}]`).trim();
+          return { club_id: id, club_name: name, club_label: label };
+        })
+        .filter((row) => row.club_id);
+
+      playerRows.forEach((row) => {
+        playerNameToId.set(normalizeText(row.player_full_name), row.player_dupr_id);
+        playerNameToId.set(normalizeText(row.player_label), row.player_dupr_id);
+        playerLabelById.set(row.player_dupr_id, row.player_label);
+      });
+      clubRows.forEach((row) => {
+        clubNameToId.set(normalizeText(row.club_name), row.club_id);
+        clubNameToId.set(normalizeText(row.club_label), row.club_id);
+        clubLabelById.set(row.club_id, row.club_label);
+      });
+
+      setDataListOptions("dupr-player-options", playerRows, "player_label");
+      setDataListOptions("dupr-club-options", clubRows, "club_label");
+
+      resetSelectOptions('select[data-role="player-select"]', "Or pick player...");
+      addSharedOptions('select[data-role="player-select"]', playerRows, "player_dupr_id", "player_label");
+
+      resetSelectOptions('select[data-role="club-select"]', "All clubs (optional)");
+      addSharedOptions('select[data-role="club-select"]', clubRows, "club_id", "club_label");
+
+      syncLinkedInputs('input[data-role="player-input"]', 'select[data-role="player-select"]', playerNameToId, playerLabelById);
+      syncLinkedInputs('input[data-role="club-input"]', 'select[data-role="club-select"]', clubNameToId, clubLabelById);
+
+      setDirectoryStatus(
+        `Loaded ${playerRows.length} players and ${clubRows.length} clubs for name/ID autocomplete + dropdown selection.`,
+        false,
+      );
+    } catch (err) {
+      console.error("Failed to load directory options", err);
+      setDirectoryStatus(
+        "Could not load player/club directories. ID entry still works (enter numeric IDs directly).",
+        true,
+      );
+    }
+  }
+
+  function resolvePlayerId(form) {
+    return resolveEntityId(
+      form.dupr_id_input ? form.dupr_id_input.value : "",
+      form.dupr_id_select ? form.dupr_id_select.value : "",
+      playerNameToId,
+    );
+  }
+
+  function resolveClubId(form) {
+    return resolveEntityId(
+      form.club_id_input ? form.club_id_input.value : "",
+      form.club_id_select ? form.club_id_select.value : "",
+      clubNameToId,
+    );
+  }
+
+  function requirePlayerId(form) {
+    const duprId = resolvePlayerId(form);
+    if (!duprId) {
+      alert("Select a player by typing name/ID or choosing from the dropdown.");
+      if (form.dupr_id_input) form.dupr_id_input.focus();
+      return "";
+    }
+    return duprId;
+  }
+
   function goPlayerTrend(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return false;
     return go("/dupr/player_rating_over_time", {
-      dupr_id: form.dupr_id.value,
+      dupr_id: duprId,
       rating_type: form.rating_type.value,
       start_date: form.start_date.value,
       end_date: form.end_date.value,
@@ -114,32 +363,43 @@
   }
 
   function goRecentForm(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return false;
     return go("/dupr/player_recent_form", {
-      dupr_id: form.dupr_id.value,
+      dupr_id: duprId,
       days: form.days.value,
     });
   }
 
   function goPartnerBreakdown(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return false;
     return go("/dupr/player_partner_breakdown", {
-      dupr_id: form.dupr_id.value,
+      dupr_id: duprId,
       days: form.days.value,
     });
   }
 
   function goOpponentBreakdown(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return false;
     return go("/dupr/player_opponent_breakdown", {
-      dupr_id: form.dupr_id.value,
+      dupr_id: duprId,
       days: form.days.value,
     });
   }
 
   function goTopRisers(form) {
+    const clubId = resolveClubId(form);
     return go("/dupr/club_top_risers", {
-      club_id: form.club_id.value,
+      club_id: clubId,
       rating_type: form.rating_type.value,
       days: form.days.value,
     });
   }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadDirectoryOptions();
+  });
 </script>
 {% endblock %}

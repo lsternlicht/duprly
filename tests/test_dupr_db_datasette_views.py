@@ -175,12 +175,14 @@ class DuprDbDatasetteViewsTests(unittest.TestCase):
                 ).fetchall()
             }
         expected = {
+            "v_player_directory",
             "v_player_current_rating",
             "v_player_rating_points",
             "v_player_rating_summary_90d",
             "v_player_match_results",
             "v_player_partner_stats",
             "v_player_opponent_stats",
+            "v_club_directory",
             "v_club_rating_snapshot",
             "v_club_top_risers_90d",
         }
@@ -244,6 +246,21 @@ class DuprDbDatasetteViewsTests(unittest.TestCase):
             ).fetchone()
             self.assertIsNotNone(riser)
             self.assertGreater(riser[0], 0.0)
+
+            player_dir = conn.execute(
+                text(
+                    "SELECT player_label FROM v_player_directory WHERE player_dupr_id = 1001"
+                )
+            ).fetchone()
+            self.assertIsNotNone(player_dir)
+            self.assertIn("Player One [1001]", player_dir[0])
+
+            club_dir = conn.execute(
+                text(
+                    "SELECT club_name FROM v_club_directory WHERE club_id = 1"
+                )
+            ).fetchone()
+            self.assertIsNotNone(club_dir)
 
 
 if __name__ == "__main__":

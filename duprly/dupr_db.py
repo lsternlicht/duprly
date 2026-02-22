@@ -58,15 +58,66 @@ def ensure_datasette_views(db_engine) -> None:
     drop_order = [
         "v_club_top_risers_90d",
         "v_club_rating_snapshot",
+        "v_club_directory",
         "v_player_opponent_stats",
         "v_player_partner_stats",
         "v_player_match_results",
         "v_player_rating_summary_90d",
         "v_player_rating_points",
         "v_player_current_rating",
+        "v_player_directory",
     ]
 
     create_statements = [
+        """
+        CREATE VIEW v_player_directory AS
+        SELECT
+            p.dupr_id AS player_dupr_id,
+            COALESCE(NULLIF(TRIM(p.full_name), ''), 'Unknown') AS player_full_name,
+            p.club_id,
+            printf(
+                '%s [%d]',
+                COALESCE(NULLIF(TRIM(p.full_name), ''), 'Unknown'),
+                p.dupr_id
+            ) AS player_label
+        FROM player p
+        WHERE p.dupr_id IS NOT NULL
+        """,
+        """
+        CREATE VIEW v_club_directory AS
+        WITH candidates AS (
+            SELECT
+                p.club_id AS club_id,
+                NULL AS club_name
+            FROM player p
+            WHERE p.club_id IS NOT NULL
+              AND p.club_id != 0
+            UNION ALL
+            SELECT
+                CAST(json_extract(pms.player_metadata_json, '$.clubId') AS INTEGER) AS club_id,
+                NULLIF(TRIM(CAST(json_extract(pms.player_metadata_json, '$.clubName') AS TEXT)), '') AS club_name
+            FROM player_metadata_snapshot pms
+            WHERE json_extract(pms.player_metadata_json, '$.clubId') IS NOT NULL
+            UNION ALL
+            SELECT
+                CAST(json_extract(pmr.match_json, '$.clubId') AS INTEGER) AS club_id,
+                NULLIF(TRIM(CAST(json_extract(pmr.match_json, '$.clubName') AS TEXT)), '') AS club_name
+            FROM player_match_raw pmr
+            WHERE json_extract(pmr.match_json, '$.clubId') IS NOT NULL
+        )
+        SELECT
+            c.club_id,
+            COALESCE(MAX(c.club_name), 'Club ' || c.club_id) AS club_name,
+            printf(
+                '%s [%d]',
+                COALESCE(MAX(c.club_name), 'Club ' || c.club_id),
+                c.club_id
+            ) AS club_label
+        FROM candidates c
+        WHERE c.club_id IS NOT NULL
+          AND c.club_id != 0
+        GROUP BY c.club_id
+        """,
         """
         CREATE VIEW v_player_current_rating AS
         SELECT
@@ -240,34 +291,50 @@ def ensure_datasette_views(db_engine) -> None:
         """,
         """
         CREATE VIEW v_club_rating_snapshot AS
+        WITH base AS (
+            SELECT
+                p.club_id,
+                COUNT(*) AS players,
+                SUM(CASE WHEN r.doubles IS NOT NULL THEN 1 ELSE 0 END) AS doubles_players,
+                ROUND(AVG(r.doubles), 4) AS avg_doubles_rating,
+                SUM(CASE WHEN r.singles IS NOT NULL THEN 1 ELSE 0 END) AS singles_players,
+                ROUND(AVG(r.singles), 4) AS avg_singles_rating,
+                SUM(CASE WHEN r.is_doubles_provisional THEN 1 ELSE 0 END) AS doubles_provisional_players,
+                SUM(CASE WHEN r.is_singles_provisional THEN 1 ELSE 0 END) AS singles_provisional_players
+            FROM player p
+            LEFT JOIN rating r ON r.player_id = p.id
+            GROUP BY p.club_id
+        )
         SELECT
-            p.club_id,
-            COUNT(*) AS players,
-            SUM(CASE WHEN r.doubles IS NOT NULL THEN 1 ELSE 0 END) AS doubles_players,
-            ROUND(AVG(r.doubles), 4) AS avg_doubles_rating,
-            SUM(CASE WHEN r.singles IS NOT NULL THEN 1 ELSE 0 END) AS singles_players,
-            ROUND(AVG(r.singles), 4) AS avg_singles_rating,
-            SUM(CASE WHEN r.is_doubles_provisional THEN 1 ELSE 0 END) AS doubles_provisional_players,
-            SUM(CASE WHEN r.is_singles_provisional THEN 1 ELSE 0 END) AS singles_provisional_players
-        FROM player p
-        LEFT JOIN rating r ON r.player_id = p.id
-        GROUP BY p.club_id
+            b.club_id,
+            COALESCE(cd.club_name, 'Club ' || b.club_id) AS club_name,
+            b.players,
+            b.doubles_players,
+            b.avg_doubles_rating,
+            b.singles_players,
+            b.avg_singles_rating,
+            b.doubles_provisional_players,
+            b.singles_provisional_players
+        FROM base b
+        LEFT JOIN v_club_directory cd ON cd.club_id = b.club_id
         """,
         """
         CREATE VIEW v_club_top_risers_90d AS
         SELECT
-            club_id,
-            player_dupr_id,
-            player_full_name,
-            rating_type,
-            points_90d,
-            first_rating_90d,
-            latest_rating_90d,
-            delta_rating_90d,
-            first_rating_date_90d,
-            latest_rating_date_90d
-        FROM v_player_rating_summary_90d
-        WHERE points_90d >= 2
+            v.club_id,
+            COALESCE(cd.club_name, 'Club ' || v.club_id) AS club_name,
+            v.player_dupr_id,
+            v.player_full_name,
+            v.rating_type,
+            v.points_90d,
+            v.first_rating_90d,
+            v.latest_rating_90d,
+            v.delta_rating_90d,
+            v.first_rating_date_90d,
+            v.latest_rating_date_90d
+        FROM v_player_rating_summary_90d v
+        LEFT JOIN v_club_directory cd ON cd.club_id = v.club_id
+        WHERE v.points_90d >= 2
         """,
     ]
 
