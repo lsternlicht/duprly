@@ -1,24 +1,34 @@
-from dupr_client import DuprClient
-import os
-import sys
-import json
-from loguru import logger
-import argparse 
+#!/usr/bin/env python3
+"""Deprecated shim for compatibility.
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Get the rankings for a given club ID.'
-    )
-    parser.add_argument('club_id', type=str, help='The ID of the club to get the rankings for')
+Use: duprly export rankings CLUB_ID
+"""
+
+import argparse
+import sys
+
+from duprly.cli import main
+
+
+def run() -> None:
+    parser = argparse.ArgumentParser(description="[deprecated] Use 'duprly export rankings'")
+    parser.add_argument("club_id", help="DUPR club ID")
+    parser.add_argument("-o", "--output", help="Output JSON file")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logs")
     args = parser.parse_args()
-    dupr = DuprClient()
-    status_code, rankings = dupr.get_members_by_club_ranking(args.club_id, get_all=True)
-    if status_code != 200:
-        logger.error(f"Error fetching rankings: HTTP {status_code}")
-        sys.exit(1)
-    with open(f"rankings-{args.club_id}.json", "w") as f:
-        json.dump(rankings, f)
-    logger.info(f"Rankings saved to rankings-{args.club_id}.json")
-    
-if __name__ == "__main__":
+
+    print("[deprecated] get_club_rankings.py -> use `duprly export rankings`")
+
+    argv = ["duprly"]
+    if args.verbose:
+        argv.append("--verbose")
+    argv.extend(["export", "rankings", args.club_id])
+    if args.output:
+        argv.extend(["--output", args.output])
+
+    sys.argv = argv
     main()
+
+
+if __name__ == "__main__":
+    run()

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}DUPR Pickleball Analytics{% endblock %}
+
+{% block content %}
+<style>
+  .dupr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 16px; margin-top: 18px; }
+  .dupr-card { border: 1px solid #d6d9dd; border-radius: 10px; padding: 14px; background: #fff; }
+  .dupr-card h3 { margin: 0 0 8px 0; font-size: 1.05rem; }
+  .dupr-card p { margin: 0 0 10px 0; color: #444; }
+  .dupr-form { display: grid; gap: 8px; }
+  .dupr-form input, .dupr-form select { width: 100%; }
+  .dupr-actions { margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .dupr-note { margin-top: 12px; color: #666; font-size: .95rem; }
+</style>
+
+<section>
+  <h1>DUPR Question-Driven Analytics</h1>
+  <p>Use these cards to answer common pickleball questions from your local saved data. Defaults: <strong>doubles</strong> and <strong>last 90 days</strong> where applicable.</p>
+
+  <div class="dupr-actions">
+    <a class="button" href="/dupr">Browse database</a>
+    <a class="button" href="/dupr/rating">Rating table</a>
+    <a class="button" href="/dupr/player">Players table</a>
+    <a class="button" href="/dupr/v_player_rating_points">Rating history rows</a>
+  </div>
+
+  <div class="dupr-cards">
+    <div class="dupr-card">
+      <h3>This player's ranking over time</h3>
+      <p>Line/table-ready trend query for a single player.</p>
+      <form class="dupr-form" onsubmit="return goPlayerTrend(this)">
+        <input name="dupr_id" placeholder="DUPR ID" required>
+        <select name="rating_type">
+          <option value="DOUBLES" selected>Doubles</option>
+          <option value="SINGLES">Singles</option>
+        </select>
+        <input name="start_date" placeholder="Start YYYY-MM-DD">
+        <input name="end_date" placeholder="End YYYY-MM-DD">
+        <button type="submit">Open Trend</button>
+      </form>
+    </div>
+
+    <div class="dupr-card">
+      <h3>Recent form</h3>
+      <p>Win/loss and win-rate momentum over a recent window.</p>
+      <form class="dupr-form" onsubmit="return goRecentForm(this)">
+        <input name="dupr_id" placeholder="DUPR ID" required>
+        <input name="days" value="90" placeholder="Days">
+        <button type="submit">Open Recent Form</button>
+      </form>
+    </div>
+
+    <div class="dupr-card">
+      <h3>Best partners</h3>
+      <p>Find partner combinations with match volume and win-rate.</p>
+      <form class="dupr-form" onsubmit="return goPartnerBreakdown(this)">
+        <input name="dupr_id" placeholder="DUPR ID" required>
+        <input name="days" value="90" placeholder="Days">
+        <button type="submit">Open Partner Breakdown</button>
+      </form>
+    </div>
+
+    <div class="dupr-card">
+      <h3>Hardest opponents</h3>
+      <p>Opponent-level matchup outcomes for targeted analysis.</p>
+      <form class="dupr-form" onsubmit="return goOpponentBreakdown(this)">
+        <input name="dupr_id" placeholder="DUPR ID" required>
+        <input name="days" value="90" placeholder="Days">
+        <button type="submit">Open Opponent Breakdown</button>
+      </form>
+    </div>
+
+    <div class="dupr-card">
+      <h3>Top club risers</h3>
+      <p>Who improved most over the selected time window.</p>
+      <form class="dupr-form" onsubmit="return goTopRisers(this)">
+        <input name="club_id" placeholder="Club ID (optional)">
+        <select name="rating_type">
+          <option value="DOUBLES" selected>Doubles</option>
+          <option value="SINGLES">Singles</option>
+        </select>
+        <input name="days" value="90" placeholder="Days">
+        <button type="submit">Open Top Risers</button>
+      </form>
+    </div>
+  </div>
+
+  <p class="dupr-note">Tip: every result page supports CSV/JSON export using Datasette's built-in export controls.</p>
+</section>
+
+<script>
+  function toQuery(params) {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v).trim() !== "") qs.set(k, String(v).trim());
+    });
+    return qs.toString();
+  }
+
+  function go(path, params) {
+    const qs = toQuery(params);
+    window.location.href = qs ? `${path}?${qs}` : path;
+    return false;
+  }
+
+  function goPlayerTrend(form) {
+    return go("/dupr/player_rating_over_time", {
+      dupr_id: form.dupr_id.value,
+      rating_type: form.rating_type.value,
+      start_date: form.start_date.value,
+      end_date: form.end_date.value,
+    });
+  }
+
+  function goRecentForm(form) {
+    return go("/dupr/player_recent_form", {
+      dupr_id: form.dupr_id.value,
+      days: form.days.value,
+    });
+  }
+
+  function goPartnerBreakdown(form) {
+    return go("/dupr/player_partner_breakdown", {
+      dupr_id: form.dupr_id.value,
+      days: form.days.value,
+    });
+  }
+
+  function goOpponentBreakdown(form) {
+    return go("/dupr/player_opponent_breakdown", {
+      dupr_id: form.dupr_id.value,
+      days: form.days.value,
+    });
+  }
+
+  function goTopRisers(form) {
+    return go("/dupr/club_top_risers", {
+      club_id: form.club_id.value,
+      rating_type: form.rating_type.value,
+      days: form.days.value,
+    });
+  }
+</script>
+{% endblock %}

@@ -1,9 +1,16 @@
+click
+rich
+rich-click
 flake8==5.0.4
 loguru==0.6.0
 requests==2.31.0
 python-dotenv
 SQLAlchemy==2.0.4
 datasette==0.59
+datasette-vega
 sqlite-utils==3.17.1
 openpyxl
 tqdm
+prompt-toolkit
+browser-cookie3
+setuptools<81

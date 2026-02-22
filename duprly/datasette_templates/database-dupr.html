@@ -1,0 +1,13 @@
+{% extends "database.html" %}
+
+{% block content %}
+<div style="margin: 8px 0 14px 0; padding: 10px 12px; border: 1px solid #d6d9dd; border-radius: 8px; background: #fff;">
+  <strong>DUPR Analytics Shortcuts:</strong>
+  <a href="/">Dashboard</a>
+  · <a href="/dupr/player_rating_over_time">Player rating over time</a>
+  · <a href="/dupr/player_recent_form">Recent form</a>
+  · <a href="/dupr/club_top_risers">Top club risers</a>
+  · <a href="/dupr/rating">Rating table</a>
+</div>
+{{ super() }}
+{% endblock %}

@@ -15,7 +15,7 @@ import requests
 from requests import Response
 from loguru import logger
 import json
-from typing import Optional
+from typing import List, Optional
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -46,6 +46,7 @@ class DuprClient(object):
         self.access_token = None
         self.refresh_token = None  # from login
         self.failed = False  # Strange way to return error, for now TBD
+        self.last_error_text = ""
         self.verbose = verbose
         self.profile = None
         # breakpoint()
@@ -157,6 +158,13 @@ class DuprClient(object):
                 r = requests.get(self.u(url), headers=self.headers())
                 logger.debug(f'return: {r.status_code}')
         self.failed = r.status_code != 200
+        if self.failed:
+            try:
+                self.last_error_text = (r.text or "").strip()
+            except Exception:
+                self.last_error_text = ""
+        else:
+            self.last_error_text = ""
         return r
 
     def dupr_post(self, url, json_data=None, name: str = "") -> Response:
@@ -171,6 +179,13 @@ class DuprClient(object):
                 r = requests.post(self.u(url), headers=self.headers())
                 logger.debug(f'return: {r.status_code}')
         self.failed = r.status_code != 200
+        if self.failed:
+            try:
+                self.last_error_text = (r.text or "").strip()
+            except Exception:
+                self.last_error_text = ""
+        else:
+            self.last_error_text = ""
         return r
 
     def get_profile(self) -> tuple[int, dict]:
@@ -198,19 +213,65 @@ class DuprClient(object):
             self.ppj(r.json())
         return r.status_code
 
-    def search_clubs(self, query: str, limit: int = 10) -> tuple[int, list]:
+    def search_clubs(self, query: str, limit: int = 10, own: Optional[bool] = None) -> tuple[int, list]:
         """
         Search for clubs by name.
         Returns status code and list of club hits.
         """
         payload = {
+            "query": query,
+            "limit": limit,
+            "offset": 0,
+        }
+        # Browser lookup payload does not include `own`; keep it optional for compatibility.
+        if own is not None:
+            payload["own"] = own
+        r = self.dupr_post(f'/club/{self.version}/all', json_data=payload, name="search_clubs")
+        if r.status_code == 200:
+            data = r.json()
+            self.ppj(data)
+            hits = data.get("result", {}).get("hits", [])
+            return r.status_code, hits
+        return r.status_code, []
+
+    def search_players(
+        self,
+        query: str,
+        limit: int = 8,
+        include_unclaimed: bool = True,
+        lat: Optional[float] = None,
+        lng: Optional[float] = None,
+        radius_meters: Optional[float] = None,
+        min_rating: Optional[float] = None,
+        max_rating: Optional[float] = None,
+        location_text: str = "",
+    ) -> tuple[int, list]:
+        """
+        Search players by name.
+        Returns status code and player hits.
+        """
+        filter_data = {
+            "lat": lat if lat is not None else 40.7127753,
+            "lng": lng if lng is not None else -74.0059728,
+            "rating": {
+                "maxRating": max_rating,
+                "minRating": min_rating,
+            },
+            "locationText": location_text,
+        }
+        if radius_meters is not None:
+            filter_data["radiusInMeters"] = radius_meters
+
+        payload = {
             "limit": limit,
             "offset": 0,
             "query": query,
             "exclude": [],
-            "filter": {}
+            "includeUnclaimedPlayers": include_unclaimed,
+            "filter": filter_data,
         }
-        r = self.dupr_post(f'/club/{self.version}/all', json_data=payload, name="search_clubs")
+
+        r = self.dupr_post(f"/player/{self.version}/search", json_data=payload, name="search_players")
         if r.status_code == 200:
             data = r.json()
             self.ppj(data)
@@ -235,53 +296,186 @@ class DuprClient(object):
             # two years before end date
             start_date = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=365*2)).strftime("%Y-%m-%d")  
 
-        page_data = {
-              "filters": {
-            "eventDate": {
-            "endDate": end_date,
-            "startDate": start_date
-            },
-            "eventFormat": [
-            "SINGLES",
-            "DOUBLES"
-            ],
-            "eventName": "",
-            "matchStatus": [
-            "COMPLETE",
-            "PENDING"
-            ],
-        },
-            "sort": {
-                "order": "DESC",
-                "parameter": "MATCH_DATE",
-                },
-            "limit": 10,
-            "offset": 0
-        }
+        return self.get_member_match_history_range(
+            member_id=member_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=10,
+        )
+
+    def get_member_match_history_all(self, member_id: str, limit: int = 10) -> tuple[int, list]:
         offset = 0
-        hit_data = []
-        while offset is not None:
-            r = self.dupr_post(f'/player/{self.version}/{member_id}/history',
-                               page_data,
-                               name="get_member_match_history")
-            if r.status_code == 200:
-                offset, hits = self.handle_paging(r.json())
-                hit_data.extend(hits)
-                page_data["offset"] = offset
+        hit_data: List[dict] = []
+        status_code = 200
+        while True:
+            page_data = {
+                "filters": {
+                    "eventFormat": None,
+                },
+                "sort": {
+                    "order": "DESC",
+                    "parameter": "MATCH_DATE",
+                },
+                "limit": limit,
+                "offset": offset,
+            }
+            r = self.dupr_post(
+                f"/player/{self.version}/{member_id}/history",
+                json_data=page_data,
+                name="get_member_match_history_all",
+            )
+            status_code = r.status_code
+            if r.status_code != 200:
+                return status_code, hit_data
+
+            data = r.json()
+            result = data.get("result", {})
+            hits = result.get("hits", [])
+            hit_data.extend(hits)
+
+            total = result.get("total")
+            has_more = result.get("hasMore")
+            current_offset = result.get("offset", offset)
+            current_limit = result.get("limit", limit)
+            if total is not None:
+                if current_offset + current_limit >= total:
+                    break
+                offset = current_offset + current_limit
+                continue
+            if has_more is True:
+                offset = current_offset + current_limit
+                continue
+            if not hits or len(hits) < limit:
+                break
+            offset = current_offset + current_limit
+
+        self.ppj(hit_data)
+        return status_code, hit_data
+
+    def get_member_match_history_range(
+        self,
+        member_id: str,
+        start_date: str,
+        end_date: str,
+        limit: int = 10,
+    ) -> tuple[int, list]:
+        offset = 0
+        hit_data: List[dict] = []
+        status_code = 200
+        while True:
+            page_data = {
+                "filters": {
+                    "eventDate": {
+                        "endDate": end_date,
+                        "startDate": start_date,
+                    },
+                    "eventFormat": None,
+                },
+                "sort": {
+                    "order": "DESC",
+                    "parameter": "MATCH_DATE",
+                },
+                "limit": limit,
+                "offset": offset,
+            }
+            page_data["offset"] = offset
+            r = self.dupr_post(
+                f"/player/{self.version}/{member_id}/history",
+                json_data=page_data,
+                name="get_member_match_history_range",
+            )
+            status_code = r.status_code
+            if r.status_code != 200:
+                return status_code, hit_data
+
+            data = r.json()
+            result = data.get("result", {})
+            hits = result.get("hits", [])
+            hit_data.extend(hits)
+            total = result.get("total")
+            has_more = result.get("hasMore")
+            current_offset = result.get("offset", offset)
+            current_limit = result.get("limit", limit)
+            if total is not None:
+                if current_offset + current_limit >= total:
+                    break
+                offset = current_offset + current_limit
+                continue
+            if has_more is True:
+                offset = current_offset + current_limit
+                continue
+            if not hits or len(hits) < limit:
+                break
+            offset = current_offset + current_limit
         self.ppj(page_data)
-        return r.status_code, hit_data
+        return status_code, hit_data
 
     def get_member_match_history(self, member_id: str) -> tuple[int, list]:
+        return self.get_member_match_history_all(member_id=member_id, limit=100)
+
+    def get_player_rating_history(
+        self,
+        member_id: str,
+        rating_type: str,
+        start_date: str,
+        end_date: str,
+        limit: int = 100,
+        sort_by: str = "asc",
+    ) -> tuple[int, list]:
         offset = 0
-        hit_data = []
-        while offset is not None:
-            r = self.dupr_get(f'/player/{self.version}/{member_id}/history?limit=100&offset={offset}',
-                              name="get_member_match_history")
-            if r.status_code == 200:
-                offset, hits = self.handle_paging(r.json())
-                hit_data.extend(hits)
-        self.ppj(hit_data)
-        return r.status_code, hit_data
+        hit_data: List[dict] = []
+        status_code = 200
+        while True:
+            page_data = {
+                "endDate": end_date,
+                "limit": limit,
+                "offset": offset,
+                "startDate": start_date,
+                "sortBy": sort_by,
+                "type": rating_type.upper(),
+            }
+            r = self.dupr_post(
+                f"/player/{self.version}/{member_id}/rating-history",
+                json_data=page_data,
+                name="get_player_rating_history",
+            )
+            status_code = r.status_code
+            if r.status_code != 200:
+                return status_code, hit_data
+
+            data = r.json()
+            result = data.get("result", {})
+            hits = result.get("ratingHistory")
+            if hits is None:
+                hits = result.get("hits", [])
+            if not isinstance(hits, list):
+                hits = []
+            hit_data.extend(hits)
+
+            total = result.get("total")
+            has_more = result.get("hasMore")
+            current_offset = result.get("offset", offset)
+            current_limit = result.get("limit", limit)
+            if total is not None:
+                if current_limit <= 0 or current_offset + current_limit >= total:
+                    break
+                offset = current_offset + current_limit
+                continue
+            if has_more is True:
+                offset = current_offset + current_limit
+                continue
+            if not hits or len(hits) < limit:
+                break
+            offset = current_offset + current_limit
+        return status_code, hit_data
+
+    def get_player_calculated_stats(self, member_id: str) -> tuple[int, Optional[dict]]:
+        r = self.dupr_get(f"/user/calculated/{self.version}/stats/{member_id}", name="get_player_calculated_stats")
+        if r.status_code == 200:
+            data = r.json()
+            self.ppj(data)
+            return r.status_code, data.get("result")
+        return r.status_code, None
 
     def handle_paging(self, json_data):
         """
@@ -293,11 +487,13 @@ class DuprClient(object):
                 offset, hits = handle_paging(response.json())
 
         """
-        result = json_data["result"]
-        total = result["total"]
-        offset = result["offset"]
-        limit = result["limit"]
-        hits = result["hits"]
+        result = json_data.get("result", {})
+        total = result.get("total", 0)
+        offset = result.get("offset", 0)
+        limit = result.get("limit", 0)
+        hits = result.get("hits", [])
+        if limit <= 0:
+            return None, hits
         if offset + limit < total:
             # there is more
             return offset + limit, hits

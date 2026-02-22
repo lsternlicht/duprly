@@ -1,81 +1,193 @@
-# Introduction
+# duprly
 
-This DUPR data downloader pulls player and match history data for all players belonging
-to a club. This program pulls data form all the players that our players have played against
-even if they are not in the club, so the dataset can get pretty big.
+A CLI for downloading and processing DUPR data into a local SQLite database.
 
-The data is stored in a local sqlite3 database via SQLAlchemy (I am working on a Mac).
-This is my yet another attempt to master SQLAlchemy ORM.
+## What Changed
 
-After normalizing the data, I am using datasette to analyze the data. It is a great tool.
-Check it out!
+The CLI has been rebuilt around a single entrypoint with task-based commands:
 
-Lots of more work to be done..
+- `duprly sync ...`
+- `duprly browse ...`
+- `duprly explore ...`
+- `duprly export ...`
+- `duprly db ...`
+- `duprly doctor ...`
 
-## API Issues
+Running `duprly` with no subcommand opens an interactive menu in TTY sessions.
 
-Keeping a list of things I found. Note that this is NOT a public and supported API.
-I am just documenting it as I try different calls.
+## Setup
 
-- Player call returns no DuprId field.
-- double (and singles?) rating is always returned in the ratings field, not the verified field even
-  if the rating is verified according to the isDoublesVerified field
-- Match history calls returns teams with players but only minimal fields, and the players have a different type of DuprId
+Create a `.env` file (or pass one via `--config`):
 
-## Design Issues
-
-- because different player data gets returned between the match calls and the
-  player calls, saving a player, which is a composite object, is messy
-- don't yell at me for storing the user id and password in a plain text env file!
-  Actually this is really bad practice - do not do it.
-
-## ToDo
-
-- fix the write_excel code -- which is still using the old tinyDB database interface
-- write tests!
-
-## SQLAlchemy notes
-
-## Selecting directly into list of objects
-
-- use session.scalar(select(Class).where().all()) instead of session.execute(...).scalars()
-- returning objects cannot be use outside of the session scope afterwards!!?
-
-## Joins and selecting columns
-
-result = session.execute(
-...     select(User.name, Address.email_address)
-...     .join(User.addresses)
-...     .order_by(User.id, Address.id)
-
-## M-1 Foreign Key
-
-- in the child, store a FK field, but also
-- declare a relationship field that is for object level reference
-
-'''
-class Rating(Base):
-    ...
-    player_id: Mapped[int] = mapped_column(ForeignKey("player.id"))
-    player: Mapped["Player"] = relationship(back_populates="rating")
-'''
-## Usage
-```console
-#.env
-
+```dotenv
 DUPR_USERNAME=<username>
 DUPR_PASSWORD=<password>
 DUPR_CLUB_ID=8436164521
 ```
 
-```console
-python duprly.py get-all-players
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
 ```
 
+## CLI Usage
 
-## ClubIDs
+### Global options
+
+```bash
+duprly [--verbose] [--quiet] [--no-color] [--json] [--config PATH] [--interactive|--no-interactive] ...
 ```
-CityPickle=5951786727
-NYCPickleball=8436164521
-LifeTime=7735643894
+
+### Core workflows
+
+```bash
+# interactive mode (TTY)
+duprly
+
+# sync everything
+duprly sync all
+
+# sync only players from a specific club
+duprly sync players --club-id 8436164521
+
+# sync matches for everyone currently in local DB
+duprly sync matches --all-players
+
+# refresh ratings only where missing
+duprly sync ratings
+
+# browse a player and persist to DB
+duprly browse player 6886613721
+
+# fetch one player's full match history (ALL by default) and persist
+duprly browse matches 6886613721
+
+# fetch one player's match history in a bounded date range
+duprly browse matches 6886613721 --start-date 2025-01-01 --end-date 2025-12-31
+
+# fetch one player's rating history (defaults: both types, last 2 years)
+duprly browse rating-history 6886613721
+
+# fetch only doubles rating history for a specific date range
+duprly browse rating-history 6886613721 --type doubles --start-date 2025-12-14 --end-date 2026-02-21
+
+# live lookup by player name with suggestions, then optional match download
+duprly browse lookup --entity player --query "aidan bai"
+
+# open interactive saved-data explorer (no API calls)
+duprly explore
+
+# list saved players and export to CSV
+duprly explore players --query "sternlicht" --export csv --output explore_players.csv
+
+# inspect one saved player and drill into ratings/matches
+duprly explore player 6886613721
+duprly explore player 6886613721 ratings --type both
+duprly explore player 6886613721 matches
+
+# inspect one saved match with full raw payload
+duprly explore match 4295493637 --export json --output explore_match_4295493637.json
+
+# browse raw metadata snapshots from local tables
+duprly explore raw --kind player --player-dupr-id 6886613721
+
+# launch local web explorer (Datasette)
+duprly explore web --open
+
+# import DUPR auth token from browser cookies (top-level shortcut)
+duprly import-browser-token --browser comet --domain dupr.com
+
+# import DUPR auth token from browser cookies (Safari default)
+duprly auth import-browser-token --browser safari
+
+# search clubs
+duprly browse clubs "NYC pickle"
+
+# export club players (search/select)
+duprly export club-players "NYC pickle"
+
+# export rankings
+duprly export rankings 8436164521
+
+# export workbook from local DB
+duprly export workbook --output dupr.xlsx
+
+# DB stats / rebuild reporting table
+duprly db stats
+duprly db rebuild-match-detail
+
+# diagnostics
+duprly doctor check
+duprly doctor check --api
 ```
+
+## Question-Driven Datasette
+
+`duprly explore web --open` now launches a guided Datasette dashboard with canned analytics queries for pickleball ratings.
+
+### Common question URLs
+
+```bash
+# this player's rating over time (default doubles)
+http://127.0.0.1:8001/dupr/player_rating_over_time?dupr_id=6886613721&rating_type=DOUBLES
+
+# recent form (last 90 days by default)
+http://127.0.0.1:8001/dupr/player_recent_form?dupr_id=6886613721&days=90
+
+# partner breakdown
+http://127.0.0.1:8001/dupr/player_partner_breakdown?dupr_id=6886613721&days=90
+
+# opponent breakdown
+http://127.0.0.1:8001/dupr/player_opponent_breakdown?dupr_id=6886613721&days=90
+
+# club top risers
+http://127.0.0.1:8001/dupr/club_top_risers?club_id=7735643894&days=90&rating_type=DOUBLES
+```
+
+### Parameter glossary
+
+- `dupr_id`: numeric DUPR player ID
+- `club_id`: numeric DUPR club ID (optional in club queries)
+- `rating_type`: `DOUBLES` (default) or `SINGLES`
+- `days`: rolling window for \"recent\" analysis (default `90`)
+- `start_date` / `end_date`: optional `YYYY-MM-DD` date bounds for trend queries
+
+## Legacy Compatibility
+
+Old command names are still available with deprecation warnings:
+
+- `get-data` -> `sync all`
+- `get-all-players` -> `sync players`
+- `get-all-player-matches` -> `sync matches --all-players`
+- `get-player` -> `browse player`
+- `get-matches` -> `browse matches`
+- `update-ratings` -> `sync ratings`
+- `build-match-detail` -> `db rebuild-match-detail`
+- `stats` -> `db stats`
+- `write-excel` -> `export workbook`
+
+The old script entrypoint still works:
+
+```bash
+python /Users/leosternlicht/repos/duprly/duprly.py --help
+```
+
+Standalone helper scripts are now thin wrappers:
+
+- `get_players.py`
+- `get_club_rankings.py`
+- `get_matches.py`
+
+## Notes
+
+- DUPR endpoints used here are unofficial and may change.
+- Match history uses the browser-proven request shape (`POST /player/v1.0/{id}/history`).
+- `duprly explore` is read-only and works entirely from local SQLite data.
+- Explorer export supports CSV/JSON to file and best-effort clipboard copy.
+- `duprly explore web` depends on Datasette `0.59`, which currently needs `setuptools<81` (`pkg_resources`).
+- `duprly explore web` now generates guided metadata and templates at launch for canned analytics queries.
+- `datasette-vega` enables richer chart rendering; if missing, query pages still work in table mode.
+- For easier web browsing, `rating` now includes cached `player_dupr_id` and `player_full_name` columns.
+- Data is written to `dupr.sqlite`.
+- `duprly doctor check` is useful before first sync.

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='duprly',
-    version='0.1.0',
+    version='0.2.0',
     author='Leo',
     author_email='lsternlicht@gmail.com',
     description='A utility to download and process DUPR data.',
@@ -10,18 +10,30 @@ setup(
     long_description_content_type='text/markdown',
     url='https://github.com/lsternlicht/duprly',
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        'duprly': ['datasette_templates/*.html'],
+    },
     install_requires=[
         'sqlalchemy',
         'loguru',
         'click',
+        'rich',
+        'rich-click',
         'requests',
         'openpyxl',
         'python-dotenv',
-        'tqdm'
+        'tqdm',
+        'prompt-toolkit',
+        'browser-cookie3',
+        'setuptools<81',
+        'datasette',
+        'datasette-vega',
+        'sqlite-utils'
     ],
     entry_points={
         'console_scripts': [
-            'duprly=duprly.cli:cli',
+            'duprly=duprly.cli:main',
         ],
     },
     classifiers=[
@@ -29,5 +41,5 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.8',
 )
