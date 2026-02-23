@@ -303,6 +303,7 @@ def _datasette_cmd(
     port: int,
     metadata_path: Path,
     template_dir: Path,
+    plugins_dir: Path,
 ) -> list[str]:
     return [
         sys.executable,
@@ -317,6 +318,8 @@ def _datasette_cmd(
         str(metadata_path),
         "--template-dir",
         str(template_dir),
+        "--plugins-dir",
+        str(plugins_dir),
         "--setting",
         "default_page_size",
         "50",
@@ -353,8 +356,11 @@ def _run_datasette(runtime: AppRuntime, ui: UI, host: str, port: int, open_brows
     db_name = runtime.db_path.stem
     metadata = build_datasette_metadata(db_name)
     template_dir = Path(__file__).resolve().parent.parent / "datasette_templates"
+    plugins_dir = Path(__file__).resolve().parent.parent / "datasette_plugins"
     if not template_dir.exists():
         raise click.ClickException(f"Datasette template directory not found: {template_dir}")
+    if not plugins_dir.exists():
+        raise click.ClickException(f"Datasette plugin directory not found: {plugins_dir}")
 
     fd, temp_metadata_path = tempfile.mkstemp(prefix="duprly-datasette-", suffix=".json")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -375,7 +381,9 @@ def _run_datasette(runtime: AppRuntime, ui: UI, host: str, port: int, open_brows
         )
 
     try:
-        rc = subprocess.call(_datasette_cmd(runtime, host, port, metadata_path, template_dir))
+        rc = subprocess.call(
+            _datasette_cmd(runtime, host, port, metadata_path, template_dir, plugins_dir)
+        )
     except KeyboardInterrupt:
         rc = 0
     finally:
@@ -393,6 +401,7 @@ def _run_datasette(runtime: AppRuntime, ui: UI, host: str, port: int, open_brows
         "opened": open_browser,
         "database": db_name,
         "template_dir": str(template_dir),
+        "plugins_dir": str(plugins_dir),
         "metadata_generated": True,
         "vega_plugin": has_vega,
     }

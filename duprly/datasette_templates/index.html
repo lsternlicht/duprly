@@ -11,10 +11,15 @@
   .dupr-form { display: grid; gap: 8px; }
   .dupr-form input, .dupr-form select { width: 100%; }
   .dupr-entity-picker { display: grid; gap: 6px; }
+  .dupr-button-row { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dupr-button-row .button-primary { grid-column: 1 / -1; }
+  .dupr-copy-feedback { margin-top: 4px; color: #1f5d7c; font-size: .85rem; min-height: 1.2em; }
   .dupr-actions { margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }
   .dupr-note { margin-top: 12px; color: #666; font-size: .95rem; }
   .dupr-directory-status { margin-top: 12px; color: #1f5d7c; font-size: .9rem; }
   .dupr-directory-status.dupr-error { color: #9f1239; }
+  .dupr-inline-checks { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.9rem; }
+  .dupr-inline-checks label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
 </style>
 
 <section>
@@ -31,8 +36,45 @@
   <p class="dupr-directory-status" id="dupr-directory-status">Loading player and club options from your local DB...</p>
   <datalist id="dupr-player-options"></datalist>
   <datalist id="dupr-club-options"></datalist>
+  <datalist id="dupr-player-import-options"></datalist>
 
   <div class="dupr-cards">
+    <div class="dupr-card">
+      <h3>Add player to local DB</h3>
+      <p>Search DUPR by player name or ID, then persist to your local SQLite database.</p>
+      <form class="dupr-form" onsubmit="return addPlayerToLocal(this)">
+        <div class="dupr-entity-picker">
+          <input
+            name="lookup"
+            data-role="import-player-input"
+            list="dupr-player-import-options"
+            placeholder="Type player name or DUPR ID"
+            autocomplete="off"
+          >
+          <select name="dupr_id_select" data-role="import-player-select">
+            <option value="">Live DUPR suggestions...</option>
+          </select>
+        </div>
+        <div class="dupr-inline-checks">
+          <label>
+            <input type="checkbox" name="include_rating_history" checked>
+            include rating history
+          </label>
+          <label>
+            <input type="checkbox" name="include_matches">
+            include full match history
+          </label>
+        </div>
+        <select name="rating_type">
+          <option value="doubles" selected>Doubles rating history</option>
+          <option value="singles">Singles rating history</option>
+          <option value="both">Both rating histories</option>
+        </select>
+        <button type="submit" class="button-primary">Add Player to Local DB</button>
+        <div class="dupr-copy-feedback" data-role="import-feedback"></div>
+      </form>
+    </div>
+
     <div class="dupr-card">
       <h3>This player's ranking over time</h3>
       <p>Line/table-ready trend query for a single player.</p>
@@ -55,7 +97,13 @@
         </select>
         <input name="start_date" placeholder="Start YYYY-MM-DD">
         <input name="end_date" placeholder="End YYYY-MM-DD">
-        <button type="submit">Open Trend</button>
+        <div class="dupr-button-row">
+          <button type="submit" class="button-primary">Open Trend</button>
+          <button type="button" onclick="return getPlayerTrendJson(this.form)">Get JSON</button>
+          <button type="button" onclick="return getPlayerTrendCsv(this.form)">Get CSV</button>
+          <button type="button" onclick="return copyPlayerTrendLink(this.form)">Copy API URL</button>
+        </div>
+        <div class="dupr-copy-feedback" data-role="copy-feedback"></div>
       </form>
     </div>
 
@@ -76,7 +124,13 @@
           </select>
         </div>
         <input name="days" value="90" placeholder="Days">
-        <button type="submit">Open Recent Form</button>
+        <div class="dupr-button-row">
+          <button type="submit" class="button-primary">Open Recent Form</button>
+          <button type="button" onclick="return getRecentFormJson(this.form)">Get JSON</button>
+          <button type="button" onclick="return getRecentFormCsv(this.form)">Get CSV</button>
+          <button type="button" onclick="return copyRecentFormLink(this.form)">Copy API URL</button>
+        </div>
+        <div class="dupr-copy-feedback" data-role="copy-feedback"></div>
       </form>
     </div>
 
@@ -97,7 +151,13 @@
           </select>
         </div>
         <input name="days" value="90" placeholder="Days">
-        <button type="submit">Open Partner Breakdown</button>
+        <div class="dupr-button-row">
+          <button type="submit" class="button-primary">Open Partner Breakdown</button>
+          <button type="button" onclick="return getPartnerBreakdownJson(this.form)">Get JSON</button>
+          <button type="button" onclick="return getPartnerBreakdownCsv(this.form)">Get CSV</button>
+          <button type="button" onclick="return copyPartnerBreakdownLink(this.form)">Copy API URL</button>
+        </div>
+        <div class="dupr-copy-feedback" data-role="copy-feedback"></div>
       </form>
     </div>
 
@@ -118,7 +178,13 @@
           </select>
         </div>
         <input name="days" value="90" placeholder="Days">
-        <button type="submit">Open Opponent Breakdown</button>
+        <div class="dupr-button-row">
+          <button type="submit" class="button-primary">Open Opponent Breakdown</button>
+          <button type="button" onclick="return getOpponentBreakdownJson(this.form)">Get JSON</button>
+          <button type="button" onclick="return getOpponentBreakdownCsv(this.form)">Get CSV</button>
+          <button type="button" onclick="return copyOpponentBreakdownLink(this.form)">Copy API URL</button>
+        </div>
+        <div class="dupr-copy-feedback" data-role="copy-feedback"></div>
       </form>
     </div>
 
@@ -143,12 +209,18 @@
           <option value="SINGLES">Singles</option>
         </select>
         <input name="days" value="90" placeholder="Days">
-        <button type="submit">Open Top Risers</button>
+        <div class="dupr-button-row">
+          <button type="submit" class="button-primary">Open Top Risers</button>
+          <button type="button" onclick="return getTopRisersJson(this.form)">Get JSON</button>
+          <button type="button" onclick="return getTopRisersCsv(this.form)">Get CSV</button>
+          <button type="button" onclick="return copyTopRisersLink(this.form)">Copy API URL</button>
+        </div>
+        <div class="dupr-copy-feedback" data-role="copy-feedback"></div>
       </form>
     </div>
   </div>
 
-  <p class="dupr-note">Tip: every result page supports CSV/JSON export using Datasette's built-in export controls.</p>
+  <p class="dupr-note">Tip: use `Get JSON` / `Get CSV` for direct data retrieval, or open result pages for built-in Datasette exports.</p>
 </section>
 
 <script>
@@ -156,6 +228,10 @@
   const clubNameToId = new Map();
   const playerLabelById = new Map();
   const clubLabelById = new Map();
+  const importPlayerNameToId = new Map();
+  const importPlayerLabelById = new Map();
+  let importLookupDebounce = null;
+  let importLookupSeq = 0;
 
   function toQuery(params) {
     const qs = new URLSearchParams();
@@ -192,6 +268,48 @@
   function go(path, params) {
     const qs = toQuery(params);
     window.location.href = qs ? `${path}?${qs}` : path;
+    return false;
+  }
+
+  function buildQueryUrl(path, params, format) {
+    const endpoint = format ? `${path}.${format}` : path;
+    const next = { ...params };
+    if (format === "json" && !next._shape) {
+      next._shape = "objects";
+    }
+    const qs = toQuery(next);
+    return qs ? `${endpoint}?${qs}` : endpoint;
+  }
+
+  function openQuery(path, params, format, openInNewTab) {
+    const url = buildQueryUrl(path, params, format);
+    if (openInNewTab) {
+      window.open(url, "_blank", "noopener");
+      return false;
+    }
+    window.location.href = url;
+    return false;
+  }
+
+  function renderCopyFeedback(form, message, isError) {
+    const node = form.querySelector('[data-role="copy-feedback"]');
+    if (!node) return;
+    node.textContent = message;
+    node.style.color = isError ? "#9f1239" : "#1f5d7c";
+  }
+
+  async function copyQueryUrl(form, path, params) {
+    const url = buildQueryUrl(path, params, "json");
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        renderCopyFeedback(form, "API URL copied.", false);
+      } else {
+        renderCopyFeedback(form, `Clipboard unavailable. URL: ${url}`, true);
+      }
+    } catch (_) {
+      renderCopyFeedback(form, `Copy failed. URL: ${url}`, true);
+    }
     return false;
   }
 
@@ -256,20 +374,251 @@
     });
   }
 
+  function setImportFeedback(form, message, isError) {
+    const node = form.querySelector('[data-role="import-feedback"]');
+    if (!node) return;
+    node.textContent = message;
+    node.style.color = isError ? "#9f1239" : "#1f5d7c";
+  }
+
+  function resetImportSelectOptions(emptyLabel) {
+    document.querySelectorAll('select[data-role="import-player-select"]').forEach((select) => {
+      select.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = emptyLabel;
+      select.appendChild(option);
+    });
+  }
+
+  function setImportDataListOptions(rows) {
+    const datalist = document.getElementById("dupr-player-import-options");
+    if (!datalist) return;
+    datalist.innerHTML = "";
+    rows.forEach((row) => {
+      const option = document.createElement("option");
+      option.value = row.label;
+      datalist.appendChild(option);
+    });
+  }
+
+  function addImportSelectOptions(rows) {
+    document.querySelectorAll('select[data-role="import-player-select"]').forEach((select) => {
+      rows.forEach((row) => {
+        const option = document.createElement("option");
+        option.value = row.id;
+        option.textContent = row.already_saved ? `${row.label} • saved` : row.label;
+        select.appendChild(option);
+      });
+    });
+  }
+
+  function renderImportSuggestions(rows) {
+    importPlayerNameToId.clear();
+    importPlayerLabelById.clear();
+
+    rows.forEach((row) => {
+      importPlayerNameToId.set(normalizeText(row.full_name), row.id);
+      importPlayerNameToId.set(normalizeText(row.label), row.id);
+      importPlayerLabelById.set(row.id, row.label);
+    });
+
+    setImportDataListOptions(rows);
+    resetImportSelectOptions("Live DUPR suggestions...");
+    addImportSelectOptions(rows);
+  }
+
+  function bindImportSelectSync() {
+    document.querySelectorAll(".dupr-form").forEach((form) => {
+      const input = form.querySelector('input[data-role="import-player-input"]');
+      const select = form.querySelector('select[data-role="import-player-select"]');
+      if (!input || !select) return;
+      select.addEventListener("change", () => {
+        const id = String(select.value || "").trim();
+        if (id && importPlayerLabelById.has(id)) {
+          input.value = importPlayerLabelById.get(id);
+        }
+      });
+    });
+  }
+
+  async function lookupRemotePlayers(query, limit) {
+    const qs = new URLSearchParams();
+    qs.set("q", query);
+    qs.set("limit", String(limit || 8));
+    const response = await fetch(`/-/duprly/search-players?${qs.toString()}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      let text = "";
+      try {
+        text = await response.text();
+      } catch (_) {
+        text = "";
+      }
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (!payload || payload.ok !== true) {
+      throw new Error((payload && payload.error) || "Remote player search failed.");
+    }
+    const result = payload.result || {};
+    return Array.isArray(result.hits) ? result.hits : [];
+  }
+
+  function wireImportAutocomplete() {
+    document.querySelectorAll('input[data-role="import-player-input"]').forEach((input) => {
+      const form = input.closest("form");
+      const select = form ? form.querySelector('select[data-role="import-player-select"]') : null;
+      if (!form || !select) return;
+
+      input.addEventListener("input", () => {
+        const query = String(input.value || "").trim();
+        const numericId = extractNumericId(query) || (/^\d+$/.test(query) ? query : "");
+        if (numericId) {
+          const option = select.querySelector(`option[value="${numericId}"]`);
+          select.value = option ? numericId : "";
+        } else {
+          select.value = "";
+        }
+
+        if (importLookupDebounce) {
+          window.clearTimeout(importLookupDebounce);
+          importLookupDebounce = null;
+        }
+        if (!query || (query.length < 2 && !numericId)) {
+          renderImportSuggestions([]);
+          setImportFeedback(form, "", false);
+          return;
+        }
+
+        const seq = ++importLookupSeq;
+        importLookupDebounce = window.setTimeout(async () => {
+          try {
+            const hits = await lookupRemotePlayers(query, 8);
+            if (seq !== importLookupSeq) return;
+            renderImportSuggestions(hits);
+            if (numericId) {
+              const option = select.querySelector(`option[value="${numericId}"]`);
+              select.value = option ? numericId : "";
+            }
+            if (hits.length === 0) {
+              setImportFeedback(form, "No DUPR matches found for this query yet.", false);
+              return;
+            }
+            const savedCount = hits.filter((h) => !!h.already_saved).length;
+            setImportFeedback(
+              form,
+              `Found ${hits.length} DUPR matches (${savedCount} already in local DB).`,
+              false,
+            );
+          } catch (err) {
+            if (seq !== importLookupSeq) return;
+            renderImportSuggestions([]);
+            setImportFeedback(form, `Lookup failed: ${err.message || err}`, true);
+          }
+        }, 220);
+      });
+    });
+  }
+
+  function resolveImportPlayerId(form) {
+    const inputEl = form.querySelector('input[name="lookup"]');
+    const selectEl = form.querySelector('select[name="dupr_id_select"]');
+    const input = inputEl ? inputEl.value : "";
+    const selected = selectEl ? selectEl.value : "";
+    const resolved = resolveEntityId(input, selected, importPlayerNameToId);
+    return String(resolved || "").trim();
+  }
+
+  async function addPlayerToLocal(form) {
+    const duprId = resolveImportPlayerId(form);
+    if (!duprId) {
+      setImportFeedback(form, "Select a player from live suggestions, or type a numeric DUPR ID.", true);
+      const lookupEl = form.querySelector('input[name="lookup"]');
+      if (lookupEl) lookupEl.focus();
+      return false;
+    }
+
+    const params = new URLSearchParams();
+    params.set("dupr_id", duprId);
+    const includeRatingEl = form.querySelector('input[name="include_rating_history"]');
+    const includeMatchesEl = form.querySelector('input[name="include_matches"]');
+    const ratingTypeEl = form.querySelector('select[name="rating_type"]');
+    params.set("include_rating_history", includeRatingEl && includeRatingEl.checked ? "1" : "0");
+    params.set("include_matches", includeMatchesEl && includeMatchesEl.checked ? "1" : "0");
+    params.set("rating_type", (ratingTypeEl && ratingTypeEl.value) || "doubles");
+
+    const url = `/-/duprly/import-player?${params.toString()}`;
+    setImportFeedback(form, "Importing player from DUPR...", false);
+
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    try {
+      const response = await fetch(url, { method: "GET", credentials: "same-origin" });
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        const text = await response.text();
+        throw new Error(`Non-JSON response (HTTP ${response.status}): ${String(text || "").slice(0, 220)}`);
+      }
+      if (!response.ok || payload.ok !== true) {
+        throw new Error((payload && payload.error) || `HTTP ${response.status}`);
+      }
+      const result = payload.result || {};
+      const player = result.player || {};
+      const label = String(player.full_name || "Player");
+      let statusText = "";
+      if (result.added) {
+        statusText = `Added ${label} [${duprId}] to local DB.`;
+      } else if (result.already_saved) {
+        statusText = `${label} [${duprId}] is already saved locally (refreshed metadata).`;
+      } else {
+        statusText = `Updated ${label} [${duprId}] in local DB.`;
+      }
+      const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+      const warningText = warnings.length ? ` Warnings: ${warnings.join(" ")}` : "";
+      setImportFeedback(form, `${statusText}${warningText}`, warnings.length > 0);
+      const lookupEl = form.querySelector('input[name="lookup"]');
+      if (lookupEl && player.id) {
+        lookupEl.value = `${label} [${player.id}]`;
+      }
+      await loadDirectoryOptions();
+    } catch (err) {
+      setImportFeedback(form, `Import failed: ${err.message || err}`, true);
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+    return false;
+  }
+
+  function rowsToObjects(payload) {
+    const rows = Array.isArray(payload && payload.rows) ? payload.rows : [];
+    if (rows.length === 0) return [];
+    if (!Array.isArray(rows[0])) return rows;
+    const columns = Array.isArray(payload && payload.columns) ? payload.columns : [];
+    return rows.map((row) => {
+      const obj = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  }
+
   async function fetchDirectoryRows(path) {
     const response = await fetch(path, { credentials: "same-origin" });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
     const payload = await response.json();
-    return Array.isArray(payload.rows) ? payload.rows : [];
+    return rowsToObjects(payload);
   }
 
   async function loadDirectoryOptions() {
     try {
       const [players, clubs] = await Promise.all([
-        fetchDirectoryRows("/dupr/player_directory.json?limit=10000"),
-        fetchDirectoryRows("/dupr/club_directory.json?limit=5000"),
+        fetchDirectoryRows("/dupr/player_directory.json?limit=10000&_shape=objects"),
+        fetchDirectoryRows("/dupr/club_directory.json?limit=5000&_shape=objects"),
       ]);
 
       const playerRows = players
@@ -351,55 +700,168 @@
     return duprId;
   }
 
-  function goPlayerTrend(form) {
+  function playerTrendParams(form) {
     const duprId = requirePlayerId(form);
-    if (!duprId) return false;
-    return go("/dupr/player_rating_over_time", {
+    if (!duprId) return null;
+    return {
       dupr_id: duprId,
       rating_type: form.rating_type.value,
       start_date: form.start_date.value,
       end_date: form.end_date.value,
-    });
+    };
+  }
+
+  function recentFormParams(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return null;
+    return {
+      dupr_id: duprId,
+      days: form.days.value,
+    };
+  }
+
+  function partnerBreakdownParams(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return null;
+    return {
+      dupr_id: duprId,
+      days: form.days.value,
+    };
+  }
+
+  function opponentBreakdownParams(form) {
+    const duprId = requirePlayerId(form);
+    if (!duprId) return null;
+    return {
+      dupr_id: duprId,
+      days: form.days.value,
+    };
+  }
+
+  function topRisersParams(form) {
+    return {
+      club_id: resolveClubId(form),
+      rating_type: form.rating_type.value,
+      days: form.days.value,
+    };
+  }
+
+  function goPlayerTrend(form) {
+    const params = playerTrendParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_rating_over_time", params, "", false);
+  }
+
+  function getPlayerTrendJson(form) {
+    const params = playerTrendParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_rating_over_time", params, "json", true);
+  }
+
+  function getPlayerTrendCsv(form) {
+    const params = playerTrendParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_rating_over_time", params, "csv", true);
+  }
+
+  function copyPlayerTrendLink(form) {
+    const params = playerTrendParams(form);
+    if (!params) return false;
+    return copyQueryUrl(form, "/dupr/player_rating_over_time", params);
   }
 
   function goRecentForm(form) {
-    const duprId = requirePlayerId(form);
-    if (!duprId) return false;
-    return go("/dupr/player_recent_form", {
-      dupr_id: duprId,
-      days: form.days.value,
-    });
+    const params = recentFormParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_recent_form", params, "", false);
+  }
+
+  function getRecentFormJson(form) {
+    const params = recentFormParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_recent_form", params, "json", true);
+  }
+
+  function getRecentFormCsv(form) {
+    const params = recentFormParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_recent_form", params, "csv", true);
+  }
+
+  function copyRecentFormLink(form) {
+    const params = recentFormParams(form);
+    if (!params) return false;
+    return copyQueryUrl(form, "/dupr/player_recent_form", params);
   }
 
   function goPartnerBreakdown(form) {
-    const duprId = requirePlayerId(form);
-    if (!duprId) return false;
-    return go("/dupr/player_partner_breakdown", {
-      dupr_id: duprId,
-      days: form.days.value,
-    });
+    const params = partnerBreakdownParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_partner_breakdown", params, "", false);
+  }
+
+  function getPartnerBreakdownJson(form) {
+    const params = partnerBreakdownParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_partner_breakdown", params, "json", true);
+  }
+
+  function getPartnerBreakdownCsv(form) {
+    const params = partnerBreakdownParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_partner_breakdown", params, "csv", true);
+  }
+
+  function copyPartnerBreakdownLink(form) {
+    const params = partnerBreakdownParams(form);
+    if (!params) return false;
+    return copyQueryUrl(form, "/dupr/player_partner_breakdown", params);
   }
 
   function goOpponentBreakdown(form) {
-    const duprId = requirePlayerId(form);
-    if (!duprId) return false;
-    return go("/dupr/player_opponent_breakdown", {
-      dupr_id: duprId,
-      days: form.days.value,
-    });
+    const params = opponentBreakdownParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_opponent_breakdown", params, "", false);
+  }
+
+  function getOpponentBreakdownJson(form) {
+    const params = opponentBreakdownParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_opponent_breakdown", params, "json", true);
+  }
+
+  function getOpponentBreakdownCsv(form) {
+    const params = opponentBreakdownParams(form);
+    if (!params) return false;
+    return openQuery("/dupr/player_opponent_breakdown", params, "csv", true);
+  }
+
+  function copyOpponentBreakdownLink(form) {
+    const params = opponentBreakdownParams(form);
+    if (!params) return false;
+    return copyQueryUrl(form, "/dupr/player_opponent_breakdown", params);
   }
 
   function goTopRisers(form) {
-    const clubId = resolveClubId(form);
-    return go("/dupr/club_top_risers", {
-      club_id: clubId,
-      rating_type: form.rating_type.value,
-      days: form.days.value,
-    });
+    return openQuery("/dupr/club_top_risers", topRisersParams(form), "", false);
+  }
+
+  function getTopRisersJson(form) {
+    return openQuery("/dupr/club_top_risers", topRisersParams(form), "json", true);
+  }
+
+  function getTopRisersCsv(form) {
+    return openQuery("/dupr/club_top_risers", topRisersParams(form), "csv", true);
+  }
+
+  function copyTopRisersLink(form) {
+    return copyQueryUrl(form, "/dupr/club_top_risers", topRisersParams(form));
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     loadDirectoryOptions();
+    bindImportSelectSync();
+    wireImportAutocomplete();
   });
 </script>
 {% endblock %}

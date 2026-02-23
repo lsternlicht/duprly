@@ -126,6 +126,25 @@ duprly doctor check --api
 
 `duprly explore web --open` now launches a guided Datasette dashboard with canned analytics queries for pickleball ratings.
 
+Each dashboard card now supports direct data retrieval:
+
+- `Get JSON`: opens the query as JSON (`_shape=objects`).
+- `Get CSV`: opens the query as CSV.
+- `Copy API URL`: copies a ready-to-call JSON endpoint URL.
+
+Dashboard homepage also includes **Add player to local DB** with live DUPR autocomplete (name or ID):
+
+- searches DUPR as you type (CLI-style completion labels: `Full Name [dupr_id]`)
+- marks suggestions already saved locally
+- imports the selected player into local SQLite
+- optional one-click rating-history and full match-history sync during import
+
+For `player_rating_over_time`, the query page itself also includes:
+
+- `Request latest player data` (fetches/persists player profile + rating history from DUPR)
+- optional `include full match history`
+- auto-refresh of the page after fetch completes
+
 ### Common question URLs
 
 ```bash
@@ -143,6 +162,12 @@ http://127.0.0.1:8001/dupr/player_opponent_breakdown?dupr_id=6886613721&days=90
 
 # club top risers
 http://127.0.0.1:8001/dupr/club_top_risers?club_id=7735643894&days=90&rating_type=DOUBLES
+
+# direct JSON data retrieval (object rows)
+http://127.0.0.1:8001/dupr/player_recent_form.json?dupr_id=6886613721&days=90&_shape=objects
+
+# direct CSV data retrieval
+http://127.0.0.1:8001/dupr/player_recent_form.csv?dupr_id=6886613721&days=90
 ```
 
 ### Parameter glossary

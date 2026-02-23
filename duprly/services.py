@@ -253,6 +253,203 @@ def _persist_rating_history(
     return {"inserted": inserted, "deleted": deleted}
 
 
+def _coerce_rating_value(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text or text.upper() == "NR" or text.lower() == "none":
+        return None
+    try:
+        return float(text)
+    except Exception:
+        return None
+
+
+def _normalize_date_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        return text[:10]
+    with suppress(Exception):
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+    return None
+
+
+def _date_in_scope(day: Optional[str], start_date: str, end_date: str) -> bool:
+    if not day:
+        return False
+    return start_date <= day <= end_date
+
+
+def _derive_rating_points_from_raw_matches(
+    runtime: AppRuntime,
+    dupr_id: str,
+    rating_type: str,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, Any]]:
+    player_id = int(dupr_id)
+    rating_type_upper = rating_type.upper()
+    rating_key = "doubles" if rating_type_upper == "DOUBLES" else "singles"
+    metric_key = "Double" if rating_type_upper == "DOUBLES" else "Single"
+
+    with Session(runtime.engine) as sess:
+        raw_rows = sess.execute(
+            select(PlayerMatchRaw).where(PlayerMatchRaw.player_dupr_id == player_id)
+        ).scalars().all()
+
+    points: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    for raw in raw_rows:
+        with suppress(Exception):
+            match_payload = json.loads(raw.match_json)
+            match_id = match_payload.get("matchId") or match_payload.get("id")
+            event_date = _normalize_date_text(match_payload.get("eventDate") or match_payload.get("date"))
+            if not _date_in_scope(event_date, start_date, end_date):
+                continue
+
+            for team in match_payload.get("teams") or []:
+                pre_impact = team.get("preMatchRatingAndImpact") or {}
+                for player_key, idx in (("player1", 1), ("player2", 2)):
+                    player_data = team.get(player_key) or {}
+                    pid = player_data.get("id")
+                    if pid is None or int(pid) != player_id:
+                        continue
+
+                    post_rating = _coerce_rating_value((player_data.get("postMatchRating") or {}).get(rating_key))
+                    pre_rating = _coerce_rating_value(pre_impact.get(f"preMatch{metric_key}RatingPlayer{idx}"))
+                    impact = _coerce_rating_value(pre_impact.get(f"match{metric_key}RatingImpactPlayer{idx}"))
+                    computed_rating = None
+                    if pre_rating is not None and impact is not None:
+                        computed_rating = pre_rating + impact
+
+                    derived_from = "postMatchRating" if post_rating is not None else "preMatchRatingAndImpact"
+                    rating_value = post_rating if post_rating is not None else computed_rating
+                    if rating_value is None:
+                        continue
+
+                    dedupe_key = (event_date, int(match_id or 0), round(float(rating_value), 8), derived_from)
+                    if dedupe_key in seen:
+                        continue
+                    seen.add(dedupe_key)
+
+                    points.append(
+                        {
+                            "date": event_date,
+                            "matchDate": event_date,
+                            "rating": float(rating_value),
+                            "changedByAdmin": False,
+                            "source": "player_match_raw",
+                            "derivedFrom": derived_from,
+                            "matchId": match_id,
+                            "ratingType": rating_type_upper,
+                            "eventName": match_payload.get("eventName") or match_payload.get("league"),
+                        }
+                    )
+
+    points.sort(key=lambda row: ((row.get("date") or ""), int(row.get("matchId") or 0)))
+    return points
+
+
+def _derive_rating_point_from_player_snapshot(
+    runtime: AppRuntime,
+    dupr_id: str,
+    rating_type: str,
+    start_date: str,
+    end_date: str,
+) -> Optional[dict[str, Any]]:
+    player_id = int(dupr_id)
+    rating_type_upper = rating_type.upper()
+    rating_key = "doubles" if rating_type_upper == "DOUBLES" else "singles"
+    verified_key = f"{rating_key}Verified"
+    provisional_key = f"{rating_key}Provisional"
+
+    with Session(runtime.engine) as sess:
+        snap = sess.execute(
+            select(PlayerMetadataSnapshot).where(PlayerMetadataSnapshot.player_dupr_id == player_id)
+        ).scalar_one_or_none()
+    if snap is None:
+        return None
+
+    with suppress(Exception):
+        metadata = json.loads(snap.player_metadata_json or "{}")
+        rating = _coerce_rating_value(metadata.get(rating_key))
+        verified_rating = _coerce_rating_value(metadata.get(verified_key))
+        if rating is None:
+            rating = verified_rating
+        if rating is None:
+            return None
+        snapshot_date = snap.player_metadata_updated_at.date().isoformat()
+        if not _date_in_scope(snapshot_date, start_date, end_date):
+            return None
+        return {
+            "date": snapshot_date,
+            "matchDate": None,
+            "rating": float(rating),
+            "changedByAdmin": None,
+            "source": "player_metadata_snapshot",
+            "derivedFrom": "currentPlayerMetadata",
+            "playerId": player_id,
+            "isProvisional": bool(metadata.get(provisional_key)),
+            "verifiedRating": verified_rating,
+            "ratingType": rating_type_upper,
+        }
+    return None
+
+
+def _derive_rating_history_fallback(
+    runtime: AppRuntime,
+    dupr_id: str,
+    rating_type: str,
+    start_date: str,
+    end_date: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    points = _derive_rating_points_from_raw_matches(
+        runtime=runtime,
+        dupr_id=dupr_id,
+        rating_type=rating_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    sources: list[str] = []
+    if points:
+        sources.append("player_match_raw")
+
+    snapshot_point = _derive_rating_point_from_player_snapshot(
+        runtime=runtime,
+        dupr_id=dupr_id,
+        rating_type=rating_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if snapshot_point is not None:
+        snapshot_dup = any(
+            p.get("date") == snapshot_point.get("date")
+            and _coerce_rating_value(p.get("rating")) == _coerce_rating_value(snapshot_point.get("rating"))
+            for p in points
+        )
+        if not snapshot_dup:
+            points.append(snapshot_point)
+            points.sort(key=lambda row: ((row.get("date") or ""), int(row.get("matchId") or 0)))
+        sources.append("player_metadata_snapshot")
+
+    used = len(points) > 0
+    fallback_meta = {
+        "used": used,
+        "sources": sorted(set(sources)),
+        "rows": len(points),
+    }
+    if not used:
+        fallback_meta["reason"] = "No match-derived or metadata-derived rating points available."
+    return points, fallback_meta
+
+
 def ensure_auth(runtime: AppRuntime, ui: UI) -> None:
     runtime.load_environment()
     username = os.getenv("DUPR_USERNAME")
@@ -833,6 +1030,7 @@ def fetch_rating_history(
     histories: dict[str, list[dict]] = {}
     counts: dict[str, int] = {}
     persisted_by_type: dict[str, dict[str, int]] = {}
+    fallback_by_type: dict[str, dict[str, Any]] = {}
 
     for rtype in rating_types:
         with ui.status(f"Fetching {rtype.lower()} rating history for player {dupr_id}"):
@@ -846,8 +1044,18 @@ def fetch_rating_history(
             raise click.ClickException(
                 f"Failed to fetch {rtype.lower()} rating history for {dupr_id} (HTTP {rc})."
             )
+        fallback_meta: dict[str, Any] = {"used": False, "sources": [], "rows": len(rows)}
+        if not rows:
+            rows, fallback_meta = _derive_rating_history_fallback(
+                runtime=runtime,
+                dupr_id=dupr_id,
+                rating_type=rtype,
+                start_date=normalized_start,
+                end_date=normalized_end,
+            )
         histories[rtype.lower()] = rows
         counts[rtype.lower()] = len(rows)
+        fallback_by_type[rtype.lower()] = fallback_meta
         if persist:
             persisted_by_type[rtype.lower()] = _persist_rating_history(
                 runtime=runtime,
@@ -868,6 +1076,7 @@ def fetch_rating_history(
         "end_date": normalized_end,
         "histories": histories,
         "counts": counts,
+        "fallback": fallback_by_type,
         "persisted": persisted_by_type,
     }
 

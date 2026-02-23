@@ -205,6 +205,7 @@ class ExploreCommandTests(unittest.TestCase):
         call_args = _subprocess_call.call_args.args[0]
         self.assertIn("--metadata", call_args)
         self.assertIn("--template-dir", call_args)
+        self.assertIn("--plugins-dir", call_args)
         self.assertIn("default_page_size", call_args)
         self.assertIn("max_returned_rows", call_args)
         self.assertTrue(any("Starting web explorer" in msg for msg, _ in messages))

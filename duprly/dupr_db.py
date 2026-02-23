@@ -94,16 +94,56 @@ def ensure_datasette_views(db_engine) -> None:
               AND p.club_id != 0
             UNION ALL
             SELECT
-                CAST(json_extract(pms.player_metadata_json, '$.clubId') AS INTEGER) AS club_id,
-                NULLIF(TRIM(CAST(json_extract(pms.player_metadata_json, '$.clubName') AS TEXT)), '') AS club_name
+                CAST(
+                    CASE
+                        WHEN json_valid(pms.player_metadata_json)
+                        THEN json_extract(pms.player_metadata_json, '$.clubId')
+                        ELSE NULL
+                    END
+                    AS INTEGER
+                ) AS club_id,
+                NULLIF(
+                    TRIM(
+                        CAST(
+                            CASE
+                                WHEN json_valid(pms.player_metadata_json)
+                                THEN json_extract(pms.player_metadata_json, '$.clubName')
+                                ELSE NULL
+                            END
+                            AS TEXT
+                        )
+                    ),
+                    ''
+                ) AS club_name
             FROM player_metadata_snapshot pms
-            WHERE json_extract(pms.player_metadata_json, '$.clubId') IS NOT NULL
+            WHERE json_valid(pms.player_metadata_json)
+              AND json_extract(pms.player_metadata_json, '$.clubId') IS NOT NULL
             UNION ALL
             SELECT
-                CAST(json_extract(pmr.match_json, '$.clubId') AS INTEGER) AS club_id,
-                NULLIF(TRIM(CAST(json_extract(pmr.match_json, '$.clubName') AS TEXT)), '') AS club_name
+                CAST(
+                    CASE
+                        WHEN json_valid(pmr.match_json)
+                        THEN json_extract(pmr.match_json, '$.clubId')
+                        ELSE NULL
+                    END
+                    AS INTEGER
+                ) AS club_id,
+                NULLIF(
+                    TRIM(
+                        CAST(
+                            CASE
+                                WHEN json_valid(pmr.match_json)
+                                THEN json_extract(pmr.match_json, '$.clubName')
+                                ELSE NULL
+                            END
+                            AS TEXT
+                        )
+                    ),
+                    ''
+                ) AS club_name
             FROM player_match_raw pmr
-            WHERE json_extract(pmr.match_json, '$.clubId') IS NOT NULL
+            WHERE json_valid(pmr.match_json)
+              AND json_extract(pmr.match_json, '$.clubId') IS NOT NULL
         )
         SELECT
             c.club_id,

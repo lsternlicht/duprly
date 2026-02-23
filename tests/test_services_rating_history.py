@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from duprly.dupr_db import Base, PlayerRatingHistory
+from duprly.dupr_db import Base, PlayerMetadataSnapshot, PlayerRatingHistory
 from duprly.services import fetch_rating_history
 
 
@@ -159,6 +159,39 @@ class ServicesRatingHistoryTests(unittest.TestCase):
         with Session(self.engine) as sess:
             count = sess.query(PlayerRatingHistory).count()
             self.assertEqual(count, 0)
+
+    def test_fetch_rating_history_falls_back_to_player_snapshot_when_api_empty(self):
+        with Session(self.engine) as sess:
+            sess.add(
+                PlayerMetadataSnapshot(
+                    player_dupr_id=44,
+                    player_full_name="Fallback Player",
+                    player_metadata_json='{"id":44,"fullName":"Fallback Player","doubles":"4.999","doublesVerified":"NR","doublesProvisional":true}',
+                    player_metadata_updated_at=datetime.now(timezone.utc),
+                )
+            )
+            sess.commit()
+
+        self.client.rows_by_type["DOUBLES"] = []
+        result = fetch_rating_history(
+            runtime=self.runtime,
+            ui=self.ui,
+            dupr_id="44",
+            rating_type="doubles",
+            start_date="2024-01-01",
+            end_date="2026-12-31",
+            persist=True,
+        )
+
+        self.assertEqual(result["counts"]["doubles"], 1)
+        self.assertTrue(result["fallback"]["doubles"]["used"])
+        self.assertIn("player_metadata_snapshot", result["fallback"]["doubles"]["sources"])
+        with Session(self.engine) as sess:
+            rows = sess.scalars(
+                select(PlayerRatingHistory).where(PlayerRatingHistory.player_dupr_id == 44)
+            ).all()
+            self.assertEqual(len(rows), 1)
+            self.assertAlmostEqual(rows[0].rating, 4.999, places=3)
 
 
 if __name__ == "__main__":

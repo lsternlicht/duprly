@@ -1,0 +1,899 @@
+{% extends "query.html" %}
+
+{% block content %}
+<style>
+  .dupr-pull-panel {
+    margin: 12px 0 18px 0;
+    padding: 12px;
+    border: 1px solid #d6d9dd;
+    border-radius: 8px;
+    background: #f8fbff;
+  }
+  .dupr-pull-panel h2 {
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+  }
+  .dupr-pull-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+  }
+  .dupr-pull-note {
+    margin-top: 8px;
+    color: #374151;
+    font-size: 0.92rem;
+  }
+  .dupr-request-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .dupr-request-controls label {
+    font-size: 0.9rem;
+  }
+  .dupr-copy-feedback {
+    margin-top: 6px;
+    color: #1f5d7c;
+    font-size: 0.9rem;
+    min-height: 1.1em;
+  }
+  .dupr-no-data {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px dashed #b8c2cc;
+  }
+  .dupr-no-data pre {
+    margin: 8px 0 0 0;
+    padding: 8px;
+    border-radius: 6px;
+    background: #111827;
+    color: #f9fafb;
+    overflow-x: auto;
+  }
+  .dupr-context-panel {
+    margin: 12px 0 18px 0;
+    padding: 12px;
+    border: 1px solid #d6d9dd;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .dupr-context-panel h3 {
+    margin: 0 0 6px 0;
+    font-size: 1rem;
+  }
+  .dupr-context-panel p {
+    margin: 0 0 10px 0;
+    color: #4b5563;
+    font-size: 0.92rem;
+  }
+  .dupr-context-status {
+    margin-bottom: 8px;
+    color: #1f5d7c;
+    font-size: 0.9rem;
+  }
+  .dupr-context-actions {
+    margin-bottom: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .dupr-context-actions label {
+    font-size: 0.9rem;
+  }
+  .dupr-context-controls {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .dupr-context-control-row {
+    display: grid;
+    grid-template-columns: 150px 80px 170px 90px;
+    gap: 10px;
+    align-items: center;
+    font-size: 0.88rem;
+  }
+  .dupr-context-control-order {
+    display: inline-flex;
+    gap: 6px;
+  }
+  .dupr-context-control-order button {
+    min-width: 38px;
+  }
+  .dupr-context-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+  }
+  .dupr-context-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .dupr-context-table th,
+  .dupr-context-table td {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 6px 8px;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    font-size: 0.86rem;
+  }
+  .dupr-context-table th {
+    background: #f8fafc;
+    cursor: pointer;
+    user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .dupr-context-table tr:hover td {
+    background: #f9fbff;
+  }
+  .dupr-cell-missing {
+    color: #9f1239;
+    font-weight: 600;
+  }
+  .dupr-cell-positive { color: #0f9d58; font-weight: 600; }
+  .dupr-cell-negative { color: #d93025; font-weight: 600; }
+  .dupr-tooltip-target {
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+    cursor: help;
+  }
+  .dupr-hover-tooltip {
+    position: fixed;
+    z-index: 2000;
+    pointer-events: none;
+    min-width: 260px;
+    max-width: 420px;
+    background: linear-gradient(160deg, #f8fbff 0%, #eef5ff 100%);
+    border: 1px solid #cfe0ff;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(26, 68, 130, 0.22);
+    padding: 10px 12px;
+    color: #1f2a44;
+  }
+  .dupr-hover-tooltip h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.95rem;
+    color: #1b4f9a;
+  }
+  .dupr-hover-tooltip .dupr-tip-card {
+    margin-bottom: 8px;
+    padding: 8px;
+    border: 1px solid #dbe6f9;
+    border-radius: 9px;
+    background: #fff;
+  }
+  .dupr-hover-tooltip .dupr-tip-card:last-child { margin-bottom: 0; }
+  .dupr-hover-tooltip .dupr-tip-name {
+    font-weight: 700;
+    color: #1b4f9a;
+    margin-bottom: 3px;
+  }
+  .dupr-hover-tooltip .dupr-tip-meta {
+    color: #556;
+    font-size: 0.82rem;
+    margin-bottom: 5px;
+  }
+  .dupr-hover-tooltip .dupr-tip-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    font-size: 0.82rem;
+    margin: 2px 0;
+  }
+  .dupr-hover-tooltip .dupr-tip-label { color: #566; }
+  .dupr-hover-tooltip .dupr-tip-value { font-weight: 600; color: #243b66; }
+</style>
+
+{% set json_base = renderers["json"] if renderers and renderers.get("json") else "" %}
+{% set json_url = json_base ~ ("&" if "?" in json_base else "?") ~ "_shape=objects" if json_base else "" %}
+{% set dupr_id_value = named_parameter_values.get("dupr_id") if named_parameter_values else "" %}
+{% set rating_type_value = (named_parameter_values.get("rating_type") if named_parameter_values else "DOUBLES") or "DOUBLES" %}
+{% set rating_type_lower = rating_type_value|lower %}
+{% set start_date_value = named_parameter_values.get("start_date") if named_parameter_values else "" %}
+{% set end_date_value = named_parameter_values.get("end_date") if named_parameter_values else "" %}
+
+<section class="dupr-pull-panel">
+  <h2>Pull Player Rating Trend Data</h2>
+  <div class="dupr-pull-actions">
+    {% if json_url %}
+      <a class="button" href="{{ json_url }}">Get JSON (objects)</a>
+      <button type="button" class="button" data-url="{{ json_url }}" onclick="copyPullUrl(this.getAttribute('data-url')); return false;">Copy JSON API URL</button>
+    {% endif %}
+    {% if url_csv %}
+      <a class="button" href="{{ url_csv }}">Get CSV</a>
+    {% endif %}
+  </div>
+  <p class="dupr-pull-note">This page reads local SQLite data. Use request below to fetch fresh DUPR data for this player, then reload.</p>
+
+  <div class="dupr-request-controls">
+    <button
+      id="dupr-request-player-btn"
+      type="button"
+      class="button"
+      data-dupr-id="{{ dupr_id_value }}"
+      data-rating-type="{{ rating_type_lower }}"
+      data-start-date="{{ start_date_value }}"
+      data-end-date="{{ end_date_value }}"
+      onclick="requestLatestPlayerData(this); return false;"
+    >Request latest player data</button>
+    <label>
+      <input type="checkbox" id="dupr-include-matches">
+      include full match history
+    </label>
+  </div>
+
+  {% if not display_rows %}
+    <div class="dupr-no-data">
+      <strong>No local rating-history rows found for this player/scope.</strong>
+      {% if dupr_id_value %}
+        <div>Fetch and persist rating history, then refresh this page:</div>
+        <pre>duprly browse rating-history {{ dupr_id_value }} --type {{ rating_type_lower }}</pre>
+      {% endif %}
+    </div>
+  {% endif %}
+  <div id="dupr-copy-feedback" class="dupr-copy-feedback"></div>
+</section>
+
+<section class="dupr-context-panel" id="dupr-context-panel" data-json-url="{{ json_url }}">
+  <h3>Interactive Match Context Table</h3>
+  <p>Includes event title, location, partner, opponents, score (your side - opponent), match/created/modified dates, and rating context for each rating point.</p>
+  <div id="dupr-context-status" class="dupr-context-status">Loading context rows...</div>
+  <div class="dupr-context-actions">
+    <button type="button" class="button" onclick="return downloadMissingContext();">Download Missing Match Context Now</button>
+    <label>
+      <input type="checkbox" id="dupr-show-time-toggle">
+      show time (HH:MM:SS) for all date columns
+    </label>
+  </div>
+  <div id="dupr-context-controls" class="dupr-context-controls"></div>
+  <div class="dupr-context-table-wrap">
+    <table id="dupr-context-table" class="dupr-context-table"></table>
+  </div>
+</section>
+<div id="dupr-hover-tooltip" class="dupr-hover-tooltip" style="display:none;"></div>
+
+{{ super() }}
+
+<script>
+  const CONTEXT_COLUMNS = [
+    { key: "context_status", label: "Context", type: "text", width: 90 },
+    { key: "score_admin_changed", label: "Score Admin Change", type: "text", width: 150 },
+    { key: "resolution_method", label: "Resolution Method", type: "text", width: 160 },
+    { key: "rating_date", label: "Rating Date", type: "date", width: 120 },
+    { key: "match_date", label: "Match Date", type: "date", width: 120 },
+    { key: "created_date", label: "Date Created", type: "date", width: 180 },
+    { key: "modified_date", label: "Date Modified", type: "date", width: 180 },
+    { key: "event_title", label: "Event Title", type: "text", width: 320 },
+    { key: "location", label: "Location", type: "text", width: 220 },
+    { key: "rating", label: "Rating", type: "number", width: 90 },
+    { key: "rating_change", label: "Rating Change", type: "number", width: 120 },
+    { key: "reliability_score", label: "Reliability", type: "number", width: 100 },
+    { key: "score", label: "Score (You-Opp)", type: "text", width: 130 },
+    { key: "partner_name", label: "Partner", type: "text", width: 180 },
+    { key: "opponents", label: "Played Against", type: "text", width: 250 },
+    { key: "match_id", label: "Match ID", type: "number", width: 110 },
+    { key: "row_index", label: "Row", type: "number", width: 70 },
+  ];
+
+  let contextRows = [];
+  let contextColumnOrder = CONTEXT_COLUMNS.map((col) => col.key);
+  let contextHiddenCols = new Set();
+  let contextWidths = Object.fromEntries(CONTEXT_COLUMNS.map((col) => [col.key, col.width]));
+  let contextSort = { key: "rating_date", direction: "asc" };
+  let showDateTime = false;
+
+  function columnMeta(key) {
+    return CONTEXT_COLUMNS.find((col) => col.key === key) || null;
+  }
+
+  function setContextStatus(message, isError = false) {
+    const node = document.getElementById("dupr-context-status");
+    if (!node) return;
+    node.textContent = message;
+    node.style.color = isError ? "#9f1239" : "#1f5d7c";
+  }
+
+  function parseRows(payload) {
+    if (Array.isArray(payload)) return payload;
+    const rows = payload && Array.isArray(payload.rows) ? payload.rows : [];
+    if (rows.length === 0) return [];
+    if (!Array.isArray(rows[0])) return rows;
+    const columns = payload && Array.isArray(payload.columns) ? payload.columns : [];
+    return rows.map((row) => {
+      const obj = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  }
+
+  function parseJsonSafe(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "object") return value;
+    try {
+      return JSON.parse(String(value));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatNum(value, digits = 3) {
+    if (value === null || value === undefined || value === "") return "n/a";
+    const n = Number(value);
+    if (Number.isNaN(n)) return "n/a";
+    return n.toFixed(digits);
+  }
+
+  function formatSigned(value, digits = 3) {
+    if (value === null || value === undefined || value === "") return "n/a";
+    const n = Number(value);
+    if (Number.isNaN(n)) return "n/a";
+    const prefix = n > 0 ? "+" : "";
+    return `${prefix}${n.toFixed(digits)}`;
+  }
+
+  function tooltipMetric(pre, delta, post) {
+    return `
+      <div class="dupr-tip-row">
+        <span class="dupr-tip-label">Pre</span>
+        <span class="dupr-tip-value">${escapeHtml(formatNum(pre))}</span>
+      </div>
+      <div class="dupr-tip-row">
+        <span class="dupr-tip-label">Change</span>
+        <span class="dupr-tip-value">${escapeHtml(formatSigned(delta))}</span>
+      </div>
+      <div class="dupr-tip-row">
+        <span class="dupr-tip-label">Post</span>
+        <span class="dupr-tip-value">${escapeHtml(formatNum(post))}</span>
+      </div>
+    `;
+  }
+
+  function tooltipInfoRow(label, value) {
+    return `
+      <div class="dupr-tip-row">
+        <span class="dupr-tip-label">${escapeHtml(label)}</span>
+        <span class="dupr-tip-value">${escapeHtml(value)}</span>
+      </div>
+    `;
+  }
+
+  function displayValue(value) {
+    if (value === null || value === undefined || value === "") return "n/a";
+    const text = String(value).trim();
+    if (!text || text === "[missing]") return "n/a";
+    return text;
+  }
+
+  function buildTooltipCard(person, ratingTypeLower) {
+    if (!person || typeof person !== "object") return "";
+    const preKey = ratingTypeLower === "singles" ? "pre_singles" : "pre_doubles";
+    const deltaKey = ratingTypeLower === "singles" ? "delta_singles" : "delta_doubles";
+    const postKey = ratingTypeLower === "singles" ? "post_singles" : "post_doubles";
+    const reliability = person.reliability_score;
+    const reliabilityRow = (reliability !== null && reliability !== undefined && reliability !== "")
+      ? `
+        <div class="dupr-tip-row">
+          <span class="dupr-tip-label">Reliability</span>
+          <span class="dupr-tip-value">${escapeHtml(formatNum(reliability, 3))}</span>
+        </div>
+      `
+      : "";
+    const metaParts = [];
+    if (person.dupr_code) metaParts.push(String(person.dupr_code));
+    if (person.dupr_id) metaParts.push(`#${person.dupr_id}`);
+
+    return `
+      <div class="dupr-tip-card">
+        <div class="dupr-tip-name">${escapeHtml(person.name || "Player")}</div>
+        <div class="dupr-tip-meta">${escapeHtml(metaParts.join(" • "))}</div>
+        ${tooltipMetric(person[preKey], person[deltaKey], person[postKey])}
+        ${reliabilityRow}
+      </div>
+    `;
+  }
+
+  function buildTooltipHtml(kind, payload, ratingType) {
+    const ratingTypeLower = String(ratingType || "DOUBLES").toLowerCase();
+    const items = Array.isArray(payload) ? payload : [payload];
+    const cards = items.map((item) => buildTooltipCard(item, ratingTypeLower)).join("");
+    if (!cards) return "";
+    return `<h4>${escapeHtml(kind)} Ratings</h4>${cards}`;
+  }
+
+  function buildMatchTooltipHtml(rowData) {
+    const matchId = rowData && rowData.match_id;
+    if (matchId === null || matchId === undefined || matchId === "") return "";
+    const ratingTypeUpper = String((rowData && rowData.rating_type) || "DOUBLES").toUpperCase();
+    const latestRating = rowData && rowData.player_latest_rating;
+    const latestRatingDisplay = (latestRating === null || latestRating === undefined || latestRating === "")
+      ? "n/a"
+      : formatNum(latestRating, 3);
+    const rowRatingDisplay = (rowData && (rowData.rating !== null && rowData.rating !== undefined && rowData.rating !== ""))
+      ? formatNum(rowData.rating, 3)
+      : "n/a";
+    const latestRatingDate = rowData && rowData.player_latest_rating_date
+      ? formatDateValue(rowData.player_latest_rating_date)
+      : "";
+
+    return `
+      <h4>Match ${escapeHtml(String(matchId))}</h4>
+      <div class="dupr-tip-card">
+        ${tooltipInfoRow("Event", displayValue(rowData && rowData.event_title))}
+        ${tooltipInfoRow("Location", displayValue(rowData && rowData.location))}
+        ${tooltipInfoRow("Score", displayValue(rowData && rowData.score))}
+        ${tooltipInfoRow("Partner", displayValue(rowData && rowData.partner_name))}
+        ${tooltipInfoRow("Opponents", displayValue(rowData && rowData.opponents))}
+        ${tooltipInfoRow("Match Date", displayValue(rowData && formatDateValue(rowData.match_date)))}
+        ${tooltipInfoRow("Created", displayValue(rowData && formatDateValue(rowData.created_date)))}
+        ${tooltipInfoRow("Modified", displayValue(rowData && formatDateValue(rowData.modified_date)))}
+        ${tooltipInfoRow(`${ratingTypeUpper} Rating (Row)`, rowRatingDisplay)}
+        ${tooltipInfoRow(`${ratingTypeUpper} Most Recent`, latestRatingDisplay)}
+        ${tooltipInfoRow("Most Recent Rating Date", displayValue(latestRatingDate))}
+      </div>
+    `;
+  }
+
+  function tooltipNode() {
+    return document.getElementById("dupr-hover-tooltip");
+  }
+
+  function moveTooltip(evt) {
+    const tip = tooltipNode();
+    if (!tip || tip.style.display === "none") return;
+    const pad = 14;
+    const width = tip.offsetWidth || 300;
+    const height = tip.offsetHeight || 140;
+    let x = evt.clientX + pad;
+    let y = evt.clientY + pad;
+    if (x + width > window.innerWidth - 8) x = evt.clientX - width - pad;
+    if (y + height > window.innerHeight - 8) y = evt.clientY - height - pad;
+    if (x < 8) x = 8;
+    if (y < 8) y = 8;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
+  }
+
+  function showTooltip(html, evt) {
+    const tip = tooltipNode();
+    if (!tip || !html) return;
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    moveTooltip(evt);
+  }
+
+  function hideTooltip() {
+    const tip = tooltipNode();
+    if (!tip) return;
+    tip.style.display = "none";
+    tip.innerHTML = "";
+  }
+
+  function attachTooltipHandlers(td, html) {
+    td.classList.add("dupr-tooltip-target");
+    td.addEventListener("mouseenter", (evt) => showTooltip(html, evt));
+    td.addEventListener("mousemove", moveTooltip);
+    td.addEventListener("mouseleave", hideTooltip);
+  }
+
+  function attachHoverTooltip(td, kind, payload, ratingType) {
+    const parsed = parseJsonSafe(payload);
+    if (!parsed) return;
+    const html = buildTooltipHtml(kind, parsed, ratingType);
+    if (!html) return;
+    attachTooltipHandlers(td, html);
+  }
+
+  function attachMatchIdTooltip(td, rowData) {
+    const html = buildMatchTooltipHtml(rowData);
+    if (!html) return;
+    attachTooltipHandlers(td, html);
+  }
+
+  function compareValues(a, b, type) {
+    if (a === null || a === undefined || a === "") return b === null || b === undefined || b === "" ? 0 : 1;
+    if (b === null || b === undefined || b === "") return -1;
+
+    if (type === "number") {
+      const av = Number(a);
+      const bv = Number(b);
+      if (Number.isNaN(av) && Number.isNaN(bv)) return 0;
+      if (Number.isNaN(av)) return 1;
+      if (Number.isNaN(bv)) return -1;
+      return av - bv;
+    }
+    if (type === "date") {
+      const at = Date.parse(String(a));
+      const bt = Date.parse(String(b));
+      if (Number.isNaN(at) && Number.isNaN(bt)) return 0;
+      if (Number.isNaN(at)) return 1;
+      if (Number.isNaN(bt)) return -1;
+      return at - bt;
+    }
+    return String(a).localeCompare(String(b), undefined, { sensitivity: "base", numeric: true });
+  }
+
+  function formatDateValue(value) {
+    if (value === null || value === undefined || value === "") return "";
+    const raw = String(value).trim();
+    if (!raw) return "";
+
+    const datePart = raw.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    const timePart = raw.match(/^\d{4}-\d{2}-\d{2}[T ](\d{2}:\d{2}:\d{2})/)?.[1]
+      || raw.match(/^\d{4}-\d{2}-\d{2}[T ](\d{2}:\d{2})/)?.[1];
+
+    if (!showDateTime) {
+      if (datePart) return datePart;
+      const parsed = Date.parse(raw);
+      if (!Number.isNaN(parsed)) return new Date(parsed).toISOString().slice(0, 10);
+      return raw;
+    }
+
+    if (datePart && timePart) {
+      const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
+      return `${datePart} ${normalizedTime}`;
+    }
+    if (datePart) return `${datePart} 00:00:00`;
+
+    const parsed = Date.parse(raw);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString().slice(0, 19).replace("T", " ");
+    }
+    return raw;
+  }
+
+  function sortedContextRows() {
+    const rows = [...contextRows];
+    const key = contextSort.key;
+    const meta = columnMeta(key);
+    if (!meta) return rows;
+    rows.sort((left, right) => {
+      const cmp = compareValues(left[key], right[key], meta.type);
+      return contextSort.direction === "asc" ? cmp : -cmp;
+    });
+    return rows;
+  }
+
+  function moveColumn(key, delta) {
+    const idx = contextColumnOrder.indexOf(key);
+    if (idx < 0) return;
+    const next = idx + delta;
+    if (next < 0 || next >= contextColumnOrder.length) return;
+    const order = [...contextColumnOrder];
+    const [item] = order.splice(idx, 1);
+    order.splice(next, 0, item);
+    contextColumnOrder = order;
+    renderContextControls();
+    renderContextTable();
+  }
+
+  function toggleSort(key) {
+    if (contextSort.key === key) {
+      contextSort.direction = contextSort.direction === "asc" ? "desc" : "asc";
+    } else {
+      contextSort = { key, direction: "asc" };
+    }
+    renderContextTable();
+    renderContextControls();
+  }
+
+  function renderContextControls() {
+    const wrap = document.getElementById("dupr-context-controls");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+
+    contextColumnOrder.forEach((key) => {
+      const meta = columnMeta(key);
+      if (!meta) return;
+      const row = document.createElement("div");
+      row.className = "dupr-context-control-row";
+
+      const label = document.createElement("label");
+      label.textContent = meta.label;
+      row.appendChild(label);
+
+      const showLabel = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !contextHiddenCols.has(key);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          contextHiddenCols.delete(key);
+        } else {
+          contextHiddenCols.add(key);
+        }
+        renderContextTable();
+      });
+      showLabel.appendChild(checkbox);
+      showLabel.append(" show");
+      row.appendChild(showLabel);
+
+      const widthInput = document.createElement("input");
+      widthInput.type = "range";
+      widthInput.min = "70";
+      widthInput.max = "480";
+      widthInput.step = "10";
+      widthInput.value = String(contextWidths[key] || meta.width || 120);
+      widthInput.addEventListener("input", () => {
+        contextWidths[key] = Number(widthInput.value);
+        renderContextTable();
+      });
+      row.appendChild(widthInput);
+
+      const order = document.createElement("div");
+      order.className = "dupr-context-control-order";
+      const leftBtn = document.createElement("button");
+      leftBtn.type = "button";
+      leftBtn.textContent = "←";
+      leftBtn.addEventListener("click", () => moveColumn(key, -1));
+      const rightBtn = document.createElement("button");
+      rightBtn.type = "button";
+      rightBtn.textContent = "→";
+      rightBtn.addEventListener("click", () => moveColumn(key, 1));
+      order.appendChild(leftBtn);
+      order.appendChild(rightBtn);
+      row.appendChild(order);
+
+      wrap.appendChild(row);
+    });
+  }
+
+  function renderContextTable() {
+    const table = document.getElementById("dupr-context-table");
+    if (!table) return;
+    hideTooltip();
+    table.innerHTML = "";
+
+    const visibleKeys = contextColumnOrder.filter((key) => !contextHiddenCols.has(key));
+    if (visibleKeys.length === 0) {
+      const body = document.createElement("tbody");
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.textContent = "All columns are hidden. Re-enable at least one column above.";
+      row.appendChild(cell);
+      body.appendChild(row);
+      table.appendChild(body);
+      return;
+    }
+
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    visibleKeys.forEach((key) => {
+      const meta = columnMeta(key);
+      if (!meta) return;
+      const th = document.createElement("th");
+      th.style.width = `${contextWidths[key] || meta.width || 120}px`;
+      const sortIcon = contextSort.key === key ? (contextSort.direction === "asc" ? " ▲" : " ▼") : "";
+      th.textContent = `${meta.label}${sortIcon}`;
+      th.addEventListener("click", () => toggleSort(key));
+      headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+
+    const body = document.createElement("tbody");
+    sortedContextRows().forEach((rowData) => {
+      const tr = document.createElement("tr");
+      visibleKeys.forEach((key) => {
+        const meta = columnMeta(key);
+        if (!meta) return;
+        const td = document.createElement("td");
+        td.style.width = `${contextWidths[key] || meta.width || 120}px`;
+        const value = rowData[key];
+        if (key === "rating_change") {
+          if (value === null || value === undefined || value === "") {
+            td.textContent = "";
+          } else {
+            td.textContent = formatSigned(value, 3);
+            const n = Number(value);
+            if (!Number.isNaN(n)) {
+              if (n > 0) td.classList.add("dupr-cell-positive");
+              if (n < 0) td.classList.add("dupr-cell-negative");
+            }
+          }
+        } else if (key === "reliability_score") {
+          if (value === null || value === undefined || value === "") {
+            td.textContent = "";
+          } else {
+            td.textContent = formatNum(value, 3);
+          }
+        } else if (meta.type === "date") {
+          td.textContent = formatDateValue(value);
+        } else {
+          td.textContent = value === null || value === undefined ? "" : String(value);
+        }
+
+        if (key === "partner_name" && String(value || "").trim() !== "[missing]") {
+          attachHoverTooltip(td, "Partner", rowData.partner_tooltip_json, rowData.rating_type);
+        }
+        if (key === "opponents" && String(value || "").trim() !== "[missing]") {
+          attachHoverTooltip(td, "Opponents", rowData.opponents_tooltip_json, rowData.rating_type);
+        }
+        if (key === "match_id" && value !== null && value !== undefined && value !== "") {
+          attachMatchIdTooltip(td, rowData);
+        }
+
+        if (
+          (key === "context_status" && String(value || "").toLowerCase() === "missing")
+          || ((key === "partner_name" || key === "opponents" || key === "score" || key === "event_title" || key === "location") && String(value || "").trim() === "[missing]")
+        ) {
+          td.classList.add("dupr-cell-missing");
+        }
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+  }
+
+  async function loadContextRows() {
+    const panel = document.getElementById("dupr-context-panel");
+    const trendJsonUrl = panel ? String(panel.getAttribute("data-json-url") || "").trim() : "";
+    if (!trendJsonUrl) {
+      setContextStatus("No JSON endpoint found for this query.", true);
+      return;
+    }
+
+    try {
+      const response = await fetch(trendJsonUrl, { credentials: "same-origin" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      contextRows = parseRows(payload);
+      if (!Array.isArray(contextRows) || contextRows.length === 0) {
+        setContextStatus("No rows found for this player/scope yet.", false);
+        renderContextControls();
+        renderContextTable();
+        return;
+      }
+      const missingCount = contextRows.filter((row) => String(row.context_status || "").toLowerCase() === "missing").length;
+      if (missingCount > 0) {
+        setContextStatus(
+          `${contextRows.length} rows loaded. ${missingCount} rows are missing context fields. Click "Download Missing Match Context Now" to fetch and join more data.`,
+          true,
+        );
+      } else {
+        setContextStatus(
+          `Loaded ${contextRows.length} rows with full context. Click headers to sort, use arrows to rearrange columns, sliders to resize, and checkboxes to hide/show.`,
+          false,
+        );
+      }
+      renderContextControls();
+      renderContextTable();
+    } catch (err) {
+      setContextStatus(`Failed to load interactive rows: ${err.message || err}`, true);
+    }
+  }
+
+  async function copyPullUrl(url) {
+    const node = document.getElementById("dupr-copy-feedback");
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        if (node) node.textContent = "JSON API URL copied.";
+      } else if (node) {
+        node.textContent = `Clipboard unavailable. URL: ${url}`;
+      }
+    } catch (_) {
+      if (node) node.textContent = `Copy failed. URL: ${url}`;
+    }
+  }
+
+  async function requestLatestPlayerData(button, forceIncludeMatches) {
+    const node = document.getElementById("dupr-copy-feedback");
+    const duprId = (button.getAttribute("data-dupr-id") || "").trim();
+    if (!duprId) {
+      if (node) node.textContent = "Missing dupr_id in query parameters.";
+      return false;
+    }
+
+    const params = new URLSearchParams();
+    params.set("dupr_id", duprId);
+    params.set("rating_type", (button.getAttribute("data-rating-type") || "doubles").trim() || "doubles");
+    const startDate = (button.getAttribute("data-start-date") || "").trim();
+    const endDate = (button.getAttribute("data-end-date") || "").trim();
+    if (startDate) params.set("start_date", startDate);
+    if (endDate) params.set("end_date", endDate);
+    const includeMatchesEl = document.getElementById("dupr-include-matches");
+    const includeMatches = forceIncludeMatches ? true : !!(includeMatchesEl && includeMatchesEl.checked);
+    params.set("include_matches", includeMatches ? "1" : "0");
+
+    const url = `/-/duprly/request-player-data?${params.toString()}`;
+    if (node) node.textContent = "Requesting latest DUPR data...";
+    button.disabled = true;
+    try {
+      const response = await fetch(url, { method: "GET", credentials: "same-origin" });
+      const responseClone = response.clone();
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        if (response.status === 404) {
+          throw new Error(
+            "Refresh route not found (404). This usually means an older Datasette process is still running. " +
+            "Stop all Datasette instances and restart with `duprly explore web --open`."
+          );
+        }
+        const text = await responseClone.text();
+        throw new Error(`Non-JSON response (HTTP ${response.status}): ${String(text || "").slice(0, 220)}`);
+      }
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      const counts = (((payload.result || {}).rating_history || {}).counts) || {};
+      const singles = counts.singles || 0;
+      const doubles = counts.doubles || 0;
+      const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+      if (node) {
+        if (warnings.length > 0) {
+          node.textContent = `Data refreshed with warnings. Rating rows fetched - singles: ${singles}, doubles: ${doubles}. ${warnings.join(" ")} Reloading...`;
+        } else {
+          node.textContent = `Data refreshed. Rating rows fetched - singles: ${singles}, doubles: ${doubles}. Reloading...`;
+        }
+      }
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      if (node) node.textContent = `Refresh failed (${url}): ${err.message || err}`;
+    } finally {
+      button.disabled = false;
+    }
+    return false;
+  }
+
+  async function downloadMissingContext() {
+    const requestButton = document.getElementById("dupr-request-player-btn");
+    if (!requestButton) return false;
+    const includeMatchesEl = document.getElementById("dupr-include-matches");
+    if (includeMatchesEl) includeMatchesEl.checked = true;
+    return requestLatestPlayerData(requestButton, true);
+  }
+
+  async function checkRefreshPluginLoaded() {
+    const node = document.getElementById("dupr-copy-feedback");
+    try {
+      const response = await fetch("/-/plugins.json", { credentials: "same-origin" });
+      if (!response.ok) return;
+      const plugins = await response.json();
+      const names = Array.isArray(plugins) ? plugins.map((p) => String(p && p.name || "")) : [];
+      const hasRefresh = names.some((n) => n.includes("duprly_refresh"));
+      if (!hasRefresh && node) {
+        node.textContent =
+          "Refresh plugin not loaded in this Datasette instance. Restart with `duprly explore web --open`.";
+      }
+    } catch (_) {
+      // Best-effort check only.
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const showTimeToggle = document.getElementById("dupr-show-time-toggle");
+    if (showTimeToggle) {
+      showTimeToggle.addEventListener("change", () => {
+        showDateTime = !!showTimeToggle.checked;
+        renderContextTable();
+      });
+    }
+    checkRefreshPluginLoaded();
+    loadContextRows();
+  });
+</script>
+{% endblock %}
